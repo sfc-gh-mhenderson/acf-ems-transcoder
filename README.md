@@ -6,8 +6,8 @@ The ACF has pre-built controls which allows the Provider to monitor and control 
 
 In addition, the Provider can control which function(s)/stored procedure(s) the Consumer can access within the application.  The function(s)/stored procedure(s) will remain hidden from the Consumer, but accessible by the application.
 
-## Design Diagram
-![Application Control Framework Design](img/acf_process_flow_diagram.png)
+## Reference Architecture
+![Application Control Framework Design](img/acf_reference_architecture.png)
 
 ## Prerequisites:
 - The Provider must accept the Snowflake Marketplace Provider Terms of Service.
