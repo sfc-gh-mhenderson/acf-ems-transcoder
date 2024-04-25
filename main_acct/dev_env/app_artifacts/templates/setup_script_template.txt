@@ -920,6 +920,30 @@ try {
                 //log new request
                 snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'request', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'PROCESSING', '"New request: ${request_id}."');`});
 
+                snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}'
+                                                              ,'${consumer_name}'
+                                                              ,'${app_key_local}'
+                                                              ,'${app_mode}'
+                                                              ,'metric'
+                                                              ,'request'
+                                                              ,'[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]'
+                                                              ,SYSDATE()
+                                                              ,'PROCESSING'
+                                                              ,'{
+                                                                  "metric_type":"request_summary",
+                                                                  "metrics":{
+                                                                    "input_table_name":"${input_table}",
+                                                                    "input_record_count":${input_record_count},
+                                                                    "results_table_name":"",
+                                                                    "results_record_count":${results_record_count},
+                                                                    "results_record_count_distinct":${results_record_count_distinct},
+                                                                    "comments":"",
+                                                                    "submitted_ts":"'||SYSDATE()||'",
+                                                                    "completed_ts":""
+                                                                  }
+                                                                }'
+                                                            );`});
+                
                 //call passed-in stored procedure
                 var rset = snowflake.execute({sqlText:`CALL PROCS_APP.${proc_name}(${proc_parameters});`});
                 rset.next();
