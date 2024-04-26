@@ -67,13 +67,14 @@ GRANT USAGE ON SCHEMA IDENTIFIER($SHARE_SCH) TO SHARE IDENTIFIER($SHARE_NAME);
 GRANT SELECT ON TABLE IDENTIFIER($SHARE_TBL) TO SHARE IDENTIFIER($SHARE_NAME);
 
 --create private listing to share events with main account
---NOTE:  LISTING API PRPR MUST BE ENABLED FIRST!!!
-CREATE LISTING IDENTIFIER($SHARE_DB)
-FOR SHARE IDENTIFIER($SHARE_NAME) AS
+--NOTE:  LISTING API IS PUPR.  THE PROVIDER MUST ACCEPT TERMS FIRST
+--see:  https://other-docs.snowflake.com/en/progaccess/listing-progaccess-about
+CREATE EXTERNAL LISTING IDENTIFIER($SHARE_DB)
+SHARE IDENTIFIER($SHARE_NAME) AS
 $$
  title: "&{APP_CODE} App Events from account: &{EVENTS_ACCOUNT_LOCATOR}."
  description: "The share that contains &{APP_CODE} App Events from account: &{EVENTS_ACCOUNT_LOCATOR}."
- terms_of_service:
+ listing_terms:
    type: "OFFLINE"
  auto_fulfillment:
    refresh_schedule: "5 MINUTE"
@@ -81,7 +82,7 @@ $$
  targets:
    accounts: ["&{ORG_NAME}.&{ACF_ACCOUNT_NAME}"]
 $$
-PUBLISH=TRUE DISTRIBUTION="EXTERNAL";
+PUBLISH=TRUE REVIEW=TRUE;
 
 --unset vars
 UNSET (EVENT_WH, SHARE_DB, SHARE_SCH, SHARE_TBL, SHARE_NAME);
