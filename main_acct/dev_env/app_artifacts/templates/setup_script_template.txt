@@ -527,7 +527,7 @@ GRANT USAGE ON PROCEDURE PROCS_APP.LOG_SHARE_INSERT() TO APPLICATION ROLE APP_RO
 
 
 --create REQUEST procedure
-CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.REQUEST(app_code VARCHAR, parameters VARCHAR)
+CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.REQUEST(parameters VARCHAR)
   RETURNS VARCHAR
   LANGUAGE JAVASCRIPT
   COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"provider","component":"app_request"}}'

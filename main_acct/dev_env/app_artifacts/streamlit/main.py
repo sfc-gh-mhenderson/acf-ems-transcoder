@@ -124,7 +124,7 @@ def request(app_name, app_mode, ref_name, input_ref):
 
         if start_request:
             with st.spinner("Updating..."):
-                call_request = session.sql(f"CALL {app_name}.PROCS_APP.REQUEST('SDE_1_5', OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{app_name}.RESULTS_APP.{results_table}', 'proc_name','enrich', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('SDE_1_5','{input_table}','{match_key}','{app_name}.RESULTS_APP.{results_table}'))::varchar)").collect()
+                call_request = session.sql(f"CALL {app_name}.PROCS_APP.REQUEST(OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{app_name}.RESULTS_APP.{results_table}', 'proc_name','enrich', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('{input_table}','{match_key}','{app_name}.RESULTS_APP.{results_table}'))::varchar)").collect()
                 result = pd.DataFrame(call_request).iloc[0]['REQUEST']
                 
                 if 'ERROR:' in result:
