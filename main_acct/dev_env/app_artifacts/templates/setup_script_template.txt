@@ -271,17 +271,17 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.CONFIGURE_TRACKER()
 
       //start task
       snowflake.execute({sqlText:`ALTER TASK APP.COUNTER_RESET_TASK RESUME;`});
-
-      //create serverless task send a heartbeat message once a day to keep the event streams alive
-      snowflake.execute({sqlText:`CREATE OR REPLACE TASK APP.HEARTBEAT_TASK
-                                  SCHEDULE = '1440 minute'
-                                  COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"heartbeat_task"}'
-                                  AS
-                                    CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'heartbeat', '""', SYSDATE(), 'COMPLETE', '"heartbeat sent"');`});
-
-      //start task
-      snowflake.execute({sqlText:`ALTER TASK APP.HEARTBEAT_TASK RESUME;`});
     }
+
+    //create serverless task send a heartbeat message once a day to keep the event streams alive
+    snowflake.execute({sqlText:`CREATE OR REPLACE TASK APP.HEARTBEAT_TASK
+                                SCHEDULE = '1440 minute'
+                                COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"heartbeat_task"}'
+                                AS
+                                  CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'heartbeat', '""', SYSDATE(), 'COMPLETE', '"heartbeat sent"');`});
+
+    //start task
+    snowflake.execute({sqlText:`ALTER TASK APP.HEARTBEAT_TASK RESUME;`});
 
     return `Tracker configured.`;
       
