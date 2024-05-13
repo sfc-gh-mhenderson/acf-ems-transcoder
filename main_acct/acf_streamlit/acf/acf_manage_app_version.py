@@ -70,14 +70,14 @@ def manage_app_version(app_code, app_pkg_name, app_mode, limit_enforced, version
        f_imports = func_df.loc[func_df['property'] == 'imports', 'value'].values[0]
        f_imports_str = ""
        
-       if f_imports:
+       if f_imports != '[]':
          f_imports_str = f"""IMPORTS = ({', '.join(["'/{}'".format(value.split("/")[1]) for value in f_imports.strip('][').split(",")])})"""
 
        
        f_target_path = func_df.loc[func_df['property'] == 'target_path', 'value'].values[0]
        f_target_path_str = ""
        
-       if f_target_path:
+       if f_target_path != '[]':
          f_target_path_str = f"""TARGET_PATH = ({', '.join(["'{}'".format(value) for value in f_imports.strip('][').split(",")])})"""
 
        func_str += f"""CREATE OR REPLACE SECURE FUNCTION FUNCS_APP.{f_name}{f_signature}
@@ -86,7 +86,7 @@ LANGUAGE {f_language}
 {f_imports_str}
 HANDLER = '{f_handler}'
 {f_target_path_str}
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
 
 """
      elif f_language.upper() == 'PYTHON':
@@ -95,7 +95,7 @@ COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}
        f_imports = func_df.loc[func_df['property'] == 'imports', 'value'].values[0]
        f_imports_str = ""
        
-       if f_imports:
+       if f_imports != '[]':
          f_imports_str = f"""IMPORTS = ({', '.join(["'{}'".format(value) for value in f_imports.strip('][').split(",")])})"""
 
 
@@ -105,7 +105,7 @@ COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}
        f_packages = func_df.loc[func_df['property'] == 'packages', 'value'].values[0]
        f_packages_str = ""
 
-       if f_packages:
+       if f_packages != '[]':
          f_packages_str = f"""PACKAGES = ({', '.join(["'{}'".format(value) for value in f_packages.strip('][').split(",")])})"""
        
        func_str += f"""CREATE OR REPLACE SECURE FUNCTION FUNCS_APP.{f_name}{f_signature}
@@ -115,7 +115,7 @@ RUNTIME_VERSION = {f_runtime_version}
 {f_imports_str}
 HANDLER = '{f_handler}'
 {f_packages_str}
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
 $$
 {f_body}
 $$;
@@ -127,7 +127,7 @@ $$;
        f_imports = func_df.loc[func_df['property'] == 'imports', 'value'].values[0]
        f_imports_str = ""
        
-       if f_imports:
+       if f_imports != '[]':
          f_imports_str = f"""IMPORTS = ({', '.join(["'{}'".format(value) for value in f_imports.strip('][').split(",")])})"""
 
 
@@ -137,14 +137,14 @@ $$;
        f_packages = func_df.loc[func_df['property'] == 'packages', 'value'].values[0]
        f_packages_str = ""
 
-       if f_packages:
+       if f_packages != '[]':
          f_packages_str = f"""PACKAGES = ({', '.join(["'{}'".format(value) for value in f_packages.strip('][').split(",")])})"""     
        
 
        f_target_path = func_df.loc[func_df['property'] == 'target_path', 'value'].values[0]
        f_target_path_str = ""
        
-       if f_target_path:
+       if f_target_path != '[]':
          f_target_path_str = f"""TARGET_PATH = ({', '.join(["'{}'".format(value) for value in f_imports.strip('][').split(",")])})"""
 
      
@@ -156,7 +156,7 @@ RUNTIME_VERSION = {f_runtime_version}
 {f_packages_str}
 {f_target_path_str}
 HANDLER = '{f_handler}'
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
 $$
 {f_body}
 $$;
@@ -166,7 +166,7 @@ $$;
       func_str += f"""CREATE OR REPLACE SECURE FUNCTION FUNCS_APP.{f_name}{f_signature}
 RETURNS {f_returns}
 LANGUAGE {f_language}
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
+COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
 AS
 $$
 {f_body}
@@ -212,7 +212,7 @@ $$;
        p_imports = p_df.loc[p_df['property'] == 'imports', 'value'].values[0]
        p_imports_str = ""
        
-       if p_imports:
+       if p_imports != '[]':
          p_imports_str = f"""IMPORTS = ({', '.join(["'/{}'".format(value.split("/")[1]) for value in p_imports.strip('][').split(",")])})"""
 
        p_runtime_version =  p_df.loc[p_df['property'] == 'runtime_version', 'value'].values[0] 
@@ -224,7 +224,7 @@ $$;
        p_packages =  p_df.loc[p_df['property'] == 'packages', 'value'].values[0] 
        p_packages_str = ""
 
-       if p_packages:
+       if p_packages != '[]':
          p_packages_str = f"""PACKAGES = ({', '.join(["'{}'".format(value) for value in p_packages.strip('][').split(",")])})"""
        
        p_target_path = p_df.loc[p_df['property'] == 'target_path', 'value'].values[0]
@@ -240,7 +240,7 @@ $$;
   {p_imports_str}
   HANDLER = '{p_handler}'
   {p_target_path_str}
-  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}';
+  COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}';
 
 """
      elif p_language.upper() == 'PYTHON':
@@ -269,7 +269,7 @@ $$;
   {p_imports_str}
   HANDLER = '{p_handler}'
   {p_packages_str}
-  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
+  COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
   EXECUTE AS OWNER
   AS
   $$
@@ -281,7 +281,7 @@ $$;
         proc_str += f"""CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.{p_name}{p_signature}
   RETURNS {p_returns}
   LANGUAGE {p_language}
-  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
+  COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
   EXECUTE AS OWNER
   AS
   $$
@@ -335,9 +335,6 @@ $$;
     if version_option == 'PATCH':
       #add patch for version
       cmd_stmt = f"ALTER APPLICATION PACKAGE {app_pkg_name} ADD PATCH FOR VERSION {version} USING \\'@{app_pkg_name}.VERSIONS.{version}\\'"
-
-    #clear any existing files from stage
-    #session.sql(f"REMOVE @{app_pkg_name}.VERSIONS.{version}").collect()
 
     #put the files associated with this app version onto this stage
     session.file.put("setup_script.sql", f"@{app_pkg_name}.VERSIONS.{version}", auto_compress=False, overwrite=True)

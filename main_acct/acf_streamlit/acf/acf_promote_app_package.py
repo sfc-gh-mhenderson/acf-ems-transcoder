@@ -34,7 +34,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
           f_imports = func_df.loc[func_df['property'] == 'imports', 'value'].values[0]
           f_imports_str = ""
           
-          if f_imports:
+          if f_imports != '[]':
             f_imports_str = f"""IMPORTS = ({', '.join(["'/{}'".format(value.split("/")[1]) for value in f_imports.strip('][').split(",")])})"""
 
           
@@ -59,7 +59,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
           f_imports = func_df.loc[func_df['property'] == 'imports', 'value'].values[0]
           f_imports_str = ""
           
-          if f_imports:
+          if f_imports != '[]':
             f_imports_str = f"""IMPORTS = ({', '.join(["'{}'".format(value) for value in f_imports.strip('][').split(",")])})"""
 
 
@@ -69,7 +69,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
           f_packages = func_df.loc[func_df['property'] == 'packages', 'value'].values[0]
           f_packages_str = ""
 
-          if f_packages:
+          if f_packages != '[]':
             f_packages_str = f"""PACKAGES = ({', '.join(["'{}'".format(value) for value in f_packages.strip('][').split(",")])})"""
           
           func_str = f"""CREATE OR REPLACE FUNCTION P_{app_code}_SOURCE_DB_PROD.FUNCS_APP.{f_name}{f_signature}
@@ -91,7 +91,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
           f_imports = func_df.loc[func_df['property'] == 'imports', 'value'].values[0]
           f_imports_str = ""
           
-          if f_imports:
+          if f_imports != '[]':
             f_imports_str = f"""IMPORTS = ({', '.join(["'{}'".format(value) for value in f_imports.strip('][').split(",")])})"""
 
 
@@ -101,7 +101,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
           f_packages = func_df.loc[func_df['property'] == 'packages', 'value'].values[0]
           f_packages_str = ""
 
-          if f_packages:
+          if f_packages != '[]':
             f_packages_str = f"""PACKAGES = ({', '.join(["'{}'".format(value) for value in f_packages.strip('][').split(",")])})"""     
           
 
@@ -167,7 +167,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
           p_imports = p_df.loc[p_df['property'] == 'imports', 'value'].values[0]
           p_imports_str = ""
           
-          if p_imports:
+          if p_imports != '[]':
             p_imports_str = f"""IMPORTS = ({', '.join(["'/{}'".format(value.split("/")[1]) for value in p_imports.strip('][').split(",")])})"""
 
           p_runtime_version =  p_df.loc[p_df['property'] == 'runtime_version', 'value'].values[0] 
@@ -179,7 +179,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
           p_packages =  p_df.loc[p_df['property'] == 'packages', 'value'].values[0] 
           p_packages_str = ""
 
-          if p_packages:
+          if p_packages != '[]':
             p_packages_str = f"""PACKAGES = ({', '.join(["'{}'".format(value) for value in p_packages.strip('][').split(",")])})"""
           
           p_target_path = p_df.loc[p_df['property'] == 'target_path', 'value'].values[0]

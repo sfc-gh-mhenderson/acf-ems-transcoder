@@ -93,7 +93,7 @@ def request(app_name, app_mode, ref_name, input_ref):
         limit_interval_msg = f" for the {limit_interval} interval"
         limit_reset_msg = f"\nYour limits will reset on {limit_reset_timestamp}."
     
-    limit_msg = f"You've reached your {app_mode.upper()} limit of {limit} {limit_type.split('_')[0]}(s){limit_interval_msg}. If you wish to run additional queries, please contact us to discuss our Paid or custom Enterprise solutions.{limit_reset_msg}"
+    limit_msg = f"You've reached your {app_mode.upper()} limit of {limit} {limit_type.split('_')[0]}{limit_interval_msg}. If you wish to run additional queries, please contact us to discuss our Paid or custom Enterprise solutions.{limit_reset_msg}"
 
     #get limit check logic
     if limit_type.lower() == 'requests':

@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS APP.APP_MODE(key VARCHAR, value VARCHAR) AS SELECT 'a
 ALTER TABLE APP.APP_MODE SET COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"app_mode"}';
 GRANT SELECT ON TABLE APP.APP_MODE TO APPLICATION ROLE APP_ROLE;
 
+--create METRICS table
+CREATE TABLE IF NOT EXISTS APP.METRICS(msg VARIANT);
+ALTER TABLE APP.METRICS SET COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"metrics"}';
+
 --create RUN_TRACKER table  this table is used to track runs for historical purposes
 CREATE TABLE IF NOT EXISTS APP.RUN_TRACKER(timestamp TIMESTAMP_NTZ, request_id VARCHAR, request_type VARCHAR, input_table VARCHAR, output_table VARCHAR) COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"run_tracker"}';
 
@@ -135,7 +139,7 @@ AS
 SELECT
   MSG:account::VARCHAR account
   ,MSG:consumer_name::VARCHAR consumer_name
-  ,MAX(MSG:entry_type) entry_type
+  ,MAX(REPLACE(MSG:entry_type,'"','')) entry_type
   ,MSG:event_attributes[0]:request_id::VARCHAR request_id
   ,MAX(MSG:event_attributes[1]:proc_name::VARCHAR) proc_name
   ,MAX(MSG:event_attributes[2]:proc_parameters::VARCHAR) proc_parameters
@@ -148,11 +152,9 @@ SELECT
   ,MAX(MSG:message:metrics:comments::VARCHAR) comments
   ,MAX(MSG:message:metrics:submitted_ts::VARCHAR) submitted_ts
   ,MAX(MSG:message:metrics:completed_ts::VARCHAR) completed_ts
-FROM EVENTS.EVENTS_MASTER_V
+FROM APP.METRICS
 WHERE LOWER(MSG:entry_type) = 'metric'
 AND LOWER(MSG:message:metric_type) = 'request_summary'
-AND LOWER(account) = LOWER(CURRENT_ACCOUNT())
-AND LOWER(consumer_name) = (SELECT LOWER(consumer_name) FROM UTIL_APP.METADATA_C_V LIMIT 1)
 GROUP BY 1,2,4
 ORDER BY 1,2,4;
 
@@ -191,8 +193,8 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.CONFIGURE_TRACKER()
       consumer_name = rset.getColumnValue(1);
     } 
 
-    if (app_mode.toLocaleLowerCase() == 'data_lab') {
-      var rset = snowflake.execute({sqlText:`SELECT 'DL_' || CURRENT_ACCOUNT_NAME() as acct_name;`});
+    if (app_mode.toLocaleLowerCase() == 'paid') {
+      var rset = snowflake.execute({sqlText:`SELECT 'PD_' || CURRENT_ACCOUNT_NAME() as acct_name;`});
       rset.next();
       consumer_name = rset.getColumnValue(1);
     }
@@ -266,8 +268,7 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.CONFIGURE_TRACKER()
 
                                             RETURN 'done';
                                           END;
-                                        \$\$;    
-                          `});
+                                        \$\$;`});
 
       //start task
       snowflake.execute({sqlText:`ALTER TASK APP.COUNTER_RESET_TASK RESUME;`});
@@ -388,6 +389,44 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.APP_LOGGER(account_locator VARCHAR, consume
   $$
 ;
 
+--create metrics_logger procedure to log stats to the metrics table
+CREATE OR REPLACE PROCEDURE UTIL_APP.METRICS_LOGGER(account_locator VARCHAR, consumer_name VARCHAR, app_key VARCHAR, app_mode VARCHAR, entry_type VARCHAR, event_type VARCHAR, event_attributes VARCHAR, timestamp TIMESTAMP_NTZ, status VARCHAR, message VARCHAR)
+  RETURNS VARCHAR
+  LANGUAGE JAVASCRIPT
+  COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"provider","component":"app_logger"}}'
+  EXECUTE AS OWNER
+  AS 
+  $$
+  
+  try {
+      //add new msg to metrics table
+      snowflake.execute({sqlText: `INSERT INTO APP.METRICS(msg) SELECT PARSE_JSON(
+                                        '{
+                                            "account":"${ACCOUNT_LOCATOR}",
+                                            "app_code":"[[APP_CODE]]",
+                                            "consumer_name":"${CONSUMER_NAME}",
+                                            "app_key":"${APP_KEY}",
+                                            "app_mode":"${APP_MODE}",
+                                            "entry_type":"${ENTRY_TYPE}",
+                                            "event_type":"${EVENT_TYPE}",
+                                            "event_attributes":${EVENT_ATTRIBUTES.replace(/\'/g, "\\'")},
+                                            "timestamp":"'||SYSDATE()||'",
+                                            "status":"${STATUS}",
+                                            "message":'||TRIM(\$\$ ${MESSAGE}\$\$)||'
+                                        }')`});
+
+      return `Logged: ${MESSAGE}`;
+  } catch (err) {
+    var result = `Failed: Code: `+err.code + ` State: `+err.state+` Message: `+err.message.replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ")+` Stack Trace:`+ err.stack.toString().replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ");
+
+    //log error
+    snowflake.log('error', `${result}`);
+ 
+    return `Error: ${result}`;
+  }
+  $$
+;
+
 CREATE OR REPLACE PROCEDURE UTIL_APP.CUSTOM_EVENT_BILLING(class_name VARCHAR, subclass_name VARCHAR, start_timestamp FLOAT, timestamp FLOAT, base_charge FLOAT, objects VARCHAR, additional_info VARCHAR)
   RETURNS VARCHAR
   LANGUAGE JAVASCRIPT
@@ -490,12 +529,14 @@ CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.LOG_SHARE_INSERT()
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app schema created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app.app_key table created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app.app_mode table created."');`});
+    snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app.metrics table created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app.limit_tracker table created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app.run_tracker table created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app schema created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.all_procs table created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.allowed_procs_v view created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.metadata_c_v view created."');`});
+    snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app.heartbeat_task task created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.request_summary_c_v view created."');`});
     if (app_mode.toLocaleLowerCase() != 'free') {
       snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.configure_tracker procedure created."');`});
@@ -503,6 +544,7 @@ CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.LOG_SHARE_INSERT()
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.register_single_callback procedure created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.streamlit streamlit created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.app_logger procedure created."');`});
+    snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.metrics_logger procedure created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.custom_event_billing procedure created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.log_form procedure created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.load_install_sql procedure created."');`});
@@ -538,7 +580,7 @@ CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.LOG_SHARE_INSERT()
   let app_mode = rset.getColumnValue(1);
 
   //get consumer_name
-  let consumer_name = ''
+  let consumer_name = '';
 
   if (app_mode.toLocaleLowerCase() == 'free') {
     var rset = snowflake.execute({sqlText:`SELECT 'FREE_' || CURRENT_ACCOUNT_NAME() as acct_name;`});
@@ -714,7 +756,7 @@ CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.REQUEST(parameters VARCHAR)
   var app_mode = rset.getColumnValue(1);
 
   //get consumer_name
-  let consumer_name = ''
+  let consumer_name = '';
 
   if (app_mode.toLocaleLowerCase() == 'free') {
     var rset = snowflake.execute({sqlText:`SELECT 'FREE_' || CURRENT_ACCOUNT_NAME() as acct_name;`});
@@ -983,7 +1025,32 @@ try {
                 //log new request
                 snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'request', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'PROCESSING', '"New request: ${request_id}."');`});
 
+                //add process start to events and metrics tables
                 snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}'
+                                                              ,'${consumer_name}'
+                                                              ,'${app_key_local}'
+                                                              ,'${app_mode}'
+                                                              ,'metric'
+                                                              ,'request'
+                                                              ,'[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]'
+                                                              ,SYSDATE()
+                                                              ,'PROCESSING'
+                                                              ,'{
+                                                                  "metric_type":"request_summary",
+                                                                  "metrics":{
+                                                                    "input_table_name":"${input_table}",
+                                                                    "input_record_count":${input_record_count},
+                                                                    "results_table_name":"",
+                                                                    "results_record_count":${results_record_count},
+                                                                    "results_record_count_distinct":${results_record_count_distinct},
+                                                                    "comments":"",
+                                                                    "submitted_ts":"'||SYSDATE()||'",
+                                                                    "completed_ts":""
+                                                                  }
+                                                                }'
+                                                            );`});
+
+                snowflake.execute({sqlText:`CALL UTIL_APP.METRICS_LOGGER('${account_locator}'
                                                               ,'${consumer_name}'
                                                               ,'${app_key_local}'
                                                               ,'${app_mode}'
@@ -1034,7 +1101,7 @@ try {
                     results_record_count_distinct = rset.getColumnValue(1);
                   }
 
-                  //log complete status
+                  //log complete status to events and metrics tables
                   snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}'
                                                               ,'${consumer_name}'
                                                               ,'${app_key_local}'
@@ -1059,6 +1126,29 @@ try {
                                                                 }'
                                                             );`});
                   
+                  snowflake.execute({sqlText:`CALL UTIL_APP.METRICS_LOGGER('${account_locator}'
+                                                              ,'${consumer_name}'
+                                                              ,'${app_key_local}'
+                                                              ,'${app_mode}'
+                                                              ,'metric'
+                                                              ,'request'
+                                                              ,'[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]'
+                                                              ,SYSDATE()
+                                                              ,'COMPLETE'
+                                                              ,'{
+                                                                  "metric_type":"request_summary",
+                                                                  "metrics":{
+                                                                    "input_table_name":"${input_table}",
+                                                                    "input_record_count":${input_record_count},
+                                                                    "results_table_name":"${results_table}",
+                                                                    "results_record_count":${results_record_count},
+                                                                    "results_record_count_distinct":${results_record_count_distinct},
+                                                                    "comments":"",
+                                                                    "submitted_ts":"",
+                                                                    "completed_ts":"'||SYSDATE()||'"
+                                                                  }
+                                                                }'
+                                                            );`});
                   //log input and results counts
                   snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'request', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'COMPLETE', '"Request complete.  Counts available (if applicable):  Input record count: ${input_record_count}, results record count: ${results_record_count}, results record count (distinct): ${results_record_count_distinct}."');`});
 
@@ -1069,7 +1159,7 @@ try {
                   snowflake.execute({sqlText:`UPDATE APP.LIMIT_TRACKER SET value = TO_NUMBER(value) + 1 WHERE LOWER(key) = 'requests_processed_this_interval';`});
                   snowflake.execute({sqlText:`UPDATE APP.LIMIT_TRACKER SET value = TO_NUMBER(value) + ${results_record_count} WHERE LOWER(key) = 'total_records_processed';`});
                   snowflake.execute({sqlText:`UPDATE APP.LIMIT_TRACKER SET value = TO_NUMBER(value) + ${results_record_count} WHERE LOWER(key) = 'records_processed_this_interval';`});
-                  snowflake.execute({sqlText:`UPDATE APP.LIMIT_TRACKER SET value = SYSDATE() WHERE LOWER(key) = 'last_request_timestamp';`}); 
+                  snowflake.execute({sqlText:`UPDATE APP.LIMIT_TRACKER SET value = SYSDATE() WHERE LOWER(key) = 'last_request_timestamp';`});       
 
                   return `Request: ${request_id} is complete.  Results table (if applicable) is created in: ${results_table}. Input record count: ${input_record_count}, Results record count: ${results_record_count}`;
                 }
@@ -1093,7 +1183,7 @@ try {
             }
 
             //log request limit reached
-            snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'request', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'ERROR', '"The ${limit} ${limit_type} ${limit_interval_text} limit has been reached.  Consult the Provider for more details."');`});
+            snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'request', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'ERROR', '"The ${limit} ${limit} ${limit_type} ${limit_interval_text} limit has been reached.  Consult the Provider for more details."');`});
 
             return `ERROR:  The ${limit} ${limit_type} ${limit_interval_text} limit has been reached.  Consult the Provider for more details.`;                  
           }

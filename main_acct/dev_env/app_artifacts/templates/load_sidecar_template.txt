@@ -15,14 +15,12 @@ def load_sidecar_table(session, app_name, app_user):
       HELPER_DB = f'C_[[APP_CODE]]_HELPER_DB';
 
       # create admin role
-      use_SA = 'USE ROLE SECURITYADMIN;'
       create_role = f'CREATE ROLE IF NOT EXISTS {APP_ADMIN_ROLE} ;'
       role_comment = """ALTER ROLE IF EXISTS """+APP_ADMIN_ROLE+""" SET COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"consumer","component":"app_admin_role"}}'""";
       grant_role_1 = f'GRANT ROLE {APP_ADMIN_ROLE} TO ROLE SYSADMIN;'
       grant_role_2 = f'GRANT ROLE {APP_ADMIN_ROLE} TO USER "{app_user}"';
 
       # grant privileges to admin role
-      use_AA = 'USE ROLE ACCOUNTADMIN;'
       grant_role_3 = f'GRANT IMPORT SHARE ON ACCOUNT TO ROLE {APP_ADMIN_ROLE}';
       grant_role_4 = f'GRANT CREATE DATABASE ON ACCOUNT TO ROLE {APP_ADMIN_ROLE}';
       grant_role_5 = f'GRANT CREATE WAREHOUSE ON ACCOUNT TO ROLE {APP_ADMIN_ROLE}';
@@ -50,12 +48,10 @@ def load_sidecar_table(session, app_name, app_user):
 
     
       # sqls array
-      sqls = [use_SA,
-      create_role,
+      sqls = [create_role,
       role_comment,
       grant_role_1,
       grant_role_2,
-      use_AA,
       grant_role_3,
       grant_role_4,
       grant_role_5,

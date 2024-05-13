@@ -1,18 +1,24 @@
 # <APP_TITLE> - ENTERPRISE
 
 ## Prerequisites
-Prior to using the this app, the following one-time setup steps below must be executed:
+Prior to using the this app, the following one-time setup steps below **must be executed**.  Please make ONLY the changes mentioned in the **NOTES** below.  
+### Any other changes may result in the setup process failing.
 
 **NOTES:**  
-- The ACCOUNTADMIN role is required for this step.
+- Replace ```<MY_ROLE>``` with either the ACCOUNTADMIN role or a role that has been granted ACCOUNTADMIN. 
+  - ACCOUNTADMIN privileges are required for this step.
 - Replace ```<MY_WAREHOUSE>``` with the desired warehouse.  
 - For this step, an XSMALL warehouse can be used.
 - Replace all ```<APP_NAME>``` references with the name of the native app, as installed in the consumer account.
   - The App Name can be found by executing (as ACCOUNTADMIN or the role that installed the app):  ```SHOW APPLICATIONS;``` (reference the **name** column)
 
 ```
-USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE <MY_WAREHOUSE>;
+SET APP_NAME = '<APP_NAME>';
+SET MY_ROLE = '<MY_ROLE>';
+SET MY_WAREHOUSE = '<MY_WAREHOUSE>';
+
+USE ROLE IDENTIFIER($MY_ROLE);
+USE WAREHOUSE IDENTIFIER($MY_WAREHOUSE);
 
 CREATE DATABASE IF NOT EXISTS SIDECAR;
 CREATE SCHEMA IF NOT EXISTS SIDECAR.RUNNER;
@@ -34,21 +40,23 @@ def run_sidecar_sql(session, app_name):
   return "success"
 $$;
 
+-- use app database
+USE DATABASE IDENTIFIER($APP_NAME);
 
 --load install consumer setup sql commands
-CALL <APP_NAME>.UTIL_APP.LOAD_INSTALL_SQL('<APP_NAME>', (select current_user()));
+CALL UTIL_APP.LOAD_INSTALL_SQL($APP_NAME, (select current_user()));
 
 -- Parameters:
   -- app_name VARCHAR - The name of the Native App installed
   -- app_user VARCHAR - The current user
 
 --call SidecarRunner to execute commands
-CALL SIDECAR.RUNNER.SidecarRunner('<APP_NAME>');
+CALL SIDECAR.RUNNER.SidecarRunner($APP_NAME);
 
 -- Parameters:
   -- app_name VARCHAR - The name of the Native App installed
 
-USE ROLE ACCOUNTADMIN;
+USE ROLE IDENTIFIER($MY_ROLE);
 
 --create the event table, if the account does not have one
 CREATE OR REPLACE PROCEDURE C_[[APP_CODE]]_HELPER_DB.PRIVATE.DETECT_EVENT_TABLE()
@@ -74,17 +82,28 @@ CREATE OR REPLACE PROCEDURE C_[[APP_CODE]]_HELPER_DB.PRIVATE.DETECT_EVENT_TABLE(
 
 CALL C_[[APP_CODE]]_HELPER_DB.PRIVATE.DETECT_EVENT_TABLE();
 
-ALTER APPLICATION <APP_NAME> SET SHARE_EVENTS_WITH_PROVIDER=TRUE;
+ALTER APPLICATION IDENTIFIER($APP_NAME) SET SHARE_EVENTS_WITH_PROVIDER=TRUE;
+
+-- use app database
+USE DATABASE IDENTIFIER($APP_NAME);
 
 --insert initial logs --REQUIRED TO ENABLE APP
-CALL <APP_NAME>.PROCS_APP.LOG_SHARE_INSERT();
+CALL PROCS_APP.LOG_SHARE_INSERT();
 
 --grant account privileges to application
-GRANT EXECUTE TASK ON ACCOUNT TO APPLICATION <APP_NAME>;
-GRANT EXECUTE MANAGED TASK ON ACCOUNT TO APPLICATION <APP_NAME>;
+GRANT EXECUTE TASK ON ACCOUNT TO APPLICATION IDENTIFIER($APP_NAME);
+GRANT EXECUTE MANAGED TASK ON ACCOUNT TO APPLICATION IDENTIFIER($APP_NAME);
+
+--use app database
+USE DATABASE IDENTIFIER($APP_NAME);
 
 --call configure_tracker
-CALL <APP_NAME>.UTIL_APP.CONFIGURE_TRACKER();
+CALL UTIL_APP.CONFIGURE_TRACKER();
+
+--unset session variables
+UNSET (APP_NAME, MY_ROLE, MY_WAREHOUSE);
+
+SELECT 'Done' AS STATUS;
 ```
 
 ## App Usage

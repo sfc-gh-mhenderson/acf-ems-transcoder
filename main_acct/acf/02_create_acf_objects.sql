@@ -21,7 +21,7 @@ Objects(s):         DATABASE:             P_<APP_CODE>_ACF_DB
                     TABLE:                METADATA.METADATA
                     SCHEMA:               UTIL
                     PROCEDURE:            UTIL.SOURCE_TABLE_PRIVILEGES
-                    PROCEDURE:            UTIL.ADD_SECURE_VIEWS
+                    PROCEDURE:            UTIL.APP_PKG_SOURCE_VIEWS
                     SCHEMA:               CONSUMER_MGMT
                     SCHEMA:               ACF_STREAMLIT
                     STREAMLIT:            ACF_STREAMLIT.APP_CONTROL_MANAGER  
