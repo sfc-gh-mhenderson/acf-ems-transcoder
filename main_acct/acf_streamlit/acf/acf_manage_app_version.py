@@ -86,7 +86,7 @@ LANGUAGE {f_language}
 {f_imports_str}
 HANDLER = '{f_handler}'
 {f_target_path_str}
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":5}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
 
 """
      elif f_language.upper() == 'PYTHON':
@@ -115,7 +115,7 @@ RUNTIME_VERSION = {f_runtime_version}
 {f_imports_str}
 HANDLER = '{f_handler}'
 {f_packages_str}
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":5}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
 $$
 {f_body}
 $$;
@@ -156,7 +156,7 @@ RUNTIME_VERSION = {f_runtime_version}
 {f_packages_str}
 {f_target_path_str}
 HANDLER = '{f_handler}'
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":5}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
 $$
 {f_body}
 $$;
@@ -166,7 +166,7 @@ $$;
       func_str += f"""CREATE OR REPLACE SECURE FUNCTION FUNCS_APP.{f_name}{f_signature}
 RETURNS {f_returns}
 LANGUAGE {f_language}
-COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":5}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
+COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
 AS
 $$
 {f_body}
@@ -240,7 +240,7 @@ $$;
   {p_imports_str}
   HANDLER = '{p_handler}'
   {p_target_path_str}
-  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":5}},"attributes":{{"role":"provider","component":"{p_name}"}}}}';
+  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}';
 
 """
      elif p_language.upper() == 'PYTHON':
@@ -269,7 +269,7 @@ $$;
   {p_imports_str}
   HANDLER = '{p_handler}'
   {p_packages_str}
-  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":5}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
+  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
   EXECUTE AS OWNER
   AS
   $$
@@ -281,7 +281,7 @@ $$;
         proc_str += f"""CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.{p_name}{p_signature}
   RETURNS {p_returns}
   LANGUAGE {p_language}
-  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":5}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
+  COMMENT = '{{"origin":"sf_ps_wls","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{p_name}"}}}}'
   EXECUTE AS OWNER
   AS
   $$

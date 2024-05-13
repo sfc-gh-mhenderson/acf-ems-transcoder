@@ -36,14 +36,35 @@ CREATE OR ALTER VERSIONED SCHEMA util_app;
 GRANT USAGE ON SCHEMA util_app TO APPLICATION ROLE APP_ROLE;
 
 --create METADATA_C_V view for Consumer
-CREATE OR REPLACE SECURE VIEW UTIL_APP.METADATA_C_V COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"metadata_c_v"}'
-AS SELECT * FROM METADATA.METADATA_V 
-    WHERE LOWER(consumer_name) = 
-    (SELECT LOWER(consumer_name) FROM METADATA.METADATA_V 
-      WHERE LOWER(account_locator) = LOWER(CURRENT_ACCOUNT())
-      AND LOWER(key) = LOWER('app_mode')
-      AND LOWER(value) = LOWER('[[APP_MODE]]'))
-    AND LOWER(account_locator) = LOWER(CURRENT_ACCOUNT()) AND LOWER(key) NOT IN ('auto_enable','app_key');
+EXECUTE IMMEDIATE
+$$
+  DECLARE
+    create_metadata_c_v_stmt VARCHAR;
+    consumer_name_stmt VARCHAR;
+    consumer_name_res RESULTSET;
+    consumer_name_value VARCHAR;
+  BEGIN
+    consumer_name_stmt := 'SELECT LOWER(consumer_name) FROM METADATA.METADATA_V 
+                            WHERE LOWER(account_locator) = LOWER(CURRENT_ACCOUNT())
+                            AND LOWER(key) = LOWER(\'app_mode\')
+                            AND LOWER(value) = LOWER(\'[[APP_MODE]]\')';
+    consumer_name_res := (EXECUTE IMMEDIATE :consumer_name_stmt);
+
+    LET c_consumer_name_value CURSOR FOR consumer_name_res;
+
+    OPEN c_consumer_name_value;
+    FETCH c_consumer_name_value INTO consumer_name_value;
+
+
+    create_metadata_c_v_stmt := 'CREATE SECURE VIEW IF NOT EXISTS UTIL_APP.METADATA_C_V COMMENT = \'{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"metadata_c_v"}\'
+                                  AS SELECT * FROM METADATA.METADATA_V 
+                                      WHERE LOWER(consumer_name) = \'' || consumer_name_value || '\'
+                                      AND LOWER(account_locator) = LOWER(CURRENT_ACCOUNT()) AND LOWER(key) NOT IN (\'auto_enable\',\'app_key\');';
+    
+    EXECUTE IMMEDIATE :create_metadata_c_v_stmt;
+    Return 'done';
+  END;
+$$;
 
 GRANT SELECT ON VIEW UTIL_APP.METADATA_C_V TO APPLICATION ROLE APP_ROLE;
     
