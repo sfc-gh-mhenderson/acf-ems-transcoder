@@ -168,10 +168,42 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.CONFIGURE_TRACKER()
   $$
 
   try {
+    //get consumer Snowflake Account Locator
+    var rset = snowflake.execute({sqlText:`SELECT CURRENT_ACCOUNT();`});
+    rset.next();
+    let account_locator = rset.getColumnValue(1);
+
+    //get local app key
+    var rset = snowflake.execute({sqlText: `SELECT app_key FROM APP.APP_KEY;`});
+    rset.next();
+    let app_key_local = rset.getColumnValue(1);
+
     //check app_mode
     var rset = snowflake.execute({sqlText: `SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'app_mode';`});
     rset.next();
     let app_mode = rset.getColumnValue(1);
+
+    let consumer_name = '';
+
+    if (app_mode.toLocaleLowerCase() == 'free') {
+      var rset = snowflake.execute({sqlText:`SELECT 'FREE_' || CURRENT_ACCOUNT_NAME() as acct_name;`});
+      rset.next();
+      consumer_name = rset.getColumnValue(1);
+    } 
+
+    if (app_mode.toLocaleLowerCase() == 'data_lab') {
+      var rset = snowflake.execute({sqlText:`SELECT 'DL_' || CURRENT_ACCOUNT_NAME() as acct_name;`});
+      rset.next();
+      consumer_name = rset.getColumnValue(1);
+    }
+    
+    //check for either enterprise or enterprise demo mode
+    let entRegex = new RegExp('enterprise*', 'gi');
+    if (entRegex.test(app_mode.toLocaleLowerCase())) {
+      var rset = snowflake.execute({sqlText:`SELECT consumer_name FROM UTIL_APP.METADATA_C_V;`});
+      rset.next();
+      consumer_name = rset.getColumnValue(1);
+    }
 
     if (app_mode.toLocaleLowerCase() != 'free') {
       //create serverless task to check every 15 mins whether to reset the the counters based on the specified interval
@@ -239,6 +271,16 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.CONFIGURE_TRACKER()
 
       //start task
       snowflake.execute({sqlText:`ALTER TASK APP.COUNTER_RESET_TASK RESUME;`});
+
+      //create serverless task send a heartbeat message once a day to keep the event streams alive
+      snowflake.execute({sqlText:`CREATE OR REPLACE TASK APP.HEARTBEAT_TASK
+                                  SCHEDULE = '1440 minute'
+                                  COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"heartbeat_task"}'
+                                  AS
+                                    CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'heartbeat', '""', SYSDATE(), 'COMPLETE', '"heartbeat sent"');`});
+
+      //start task
+      snowflake.execute({sqlText:`ALTER TASK APP.HEARTBEAT_TASK RESUME;`});
     }
 
     return `Tracker configured.`;
