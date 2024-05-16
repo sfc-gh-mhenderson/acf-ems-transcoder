@@ -115,7 +115,7 @@ RUNTIME_VERSION = {f_runtime_version}
 {f_imports_str}
 HANDLER = '{f_handler}'
 {f_packages_str}
-COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
 $$
 {f_body}
 $$;
@@ -156,7 +156,7 @@ RUNTIME_VERSION = {f_runtime_version}
 {f_packages_str}
 {f_target_path_str}
 HANDLER = '{f_handler}'
-COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}';
+COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
 $$
 {f_body}
 $$;
