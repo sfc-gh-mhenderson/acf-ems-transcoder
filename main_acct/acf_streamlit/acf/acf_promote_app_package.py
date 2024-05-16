@@ -80,6 +80,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
     HANDLER = '{f_handler}'
     {f_packages_str}
     COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
+    AS
     $$
     {f_body}
     $$;
@@ -121,6 +122,7 @@ def promote_app_package(app_code, app_funcs_env, app_funcs_list, app_procs_env, 
     {f_target_path_str}
     HANDLER = '{f_handler}'
     COMMENT = '{{"origin":"sf_sit","name":"acf","version":{{"major":1, "minor":6}},"attributes":{{"role":"provider","component":"{f_name}"}}}}'
+    AS
     $$
     {f_body}
     $$;
