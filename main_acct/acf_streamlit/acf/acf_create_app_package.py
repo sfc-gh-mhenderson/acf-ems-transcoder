@@ -24,7 +24,7 @@ def create_app_package(app_code, app_pkg_name, source_table_list):
   AS SELECT * FROM P_"""+app_code +"""_ACF_DB.EVENTS.EVENTS_MASTER"""
   
   #create metadata_v view
-  create_metadata_v = """CREATE OR REPLACE SECURE VIEW """+app_pkg_name+""".METADATA.METADATA_V COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"app_pkg","component":"app_pkg"}}'
+  create_metadata_v = """CREATE OR REPLACE SECURE VIEW """+app_pkg_name+""".METADATA.METADATA_V CHANGE_TRACKING=TRUE COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"app_pkg","component":"app_pkg"}}'
   AS SELECT * FROM P_""" +app_code+"""_ACF_DB.METADATA.METADATA"""
   
   #create rules_dictionary_v view
