@@ -20,10 +20,14 @@ GRANT USAGE ON SCHEMA app TO APPLICATION ROLE APP_ROLE;
 CREATE TABLE IF NOT EXISTS APP.APP_KEY(app_key VARCHAR) AS
                             SELECT ENCRYPT(HASH(CURRENT_ACCOUNT()||UPPER(CURRENT_DATABASE())||DATEADD(YEAR, 1119, SYSDATE())), UUID_STRING())::string;
 ALTER TABLE APP.APP_KEY SET COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"app_key"}';
+GRANT SELECT ON TABLE APP.APP_KEY TO APPLICATION ROLE APP_ROLE;
 
 --create APP_MODE table
-CREATE TABLE IF NOT EXISTS APP.APP_MODE(key VARCHAR, value VARCHAR) AS SELECT 'app_mode', '[[APP_MODE]]';
+CREATE TABLE IF NOT EXISTS APP.APP_MODE(key VARCHAR, value VARCHAR);
 ALTER TABLE APP.APP_MODE SET COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"app_mode"}';
+INSERT INTO EXISTS APP.APP_MODE VALUES
+('app_mode', '[[APP_MODE]]')
+,('events_shared', 'no');
 GRANT SELECT ON TABLE APP.APP_MODE TO APPLICATION ROLE APP_ROLE;
 
 --create METRICS table
@@ -573,31 +577,34 @@ CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.LOG_SHARE_INSERT()
     consumer_name = rset.getColumnValue(1);
   }
   
-  if (app_mode.toLocaleLowerCase() == 'enterprise') {
+  //check for either enterprise or an optional demo mode (if adding a demo app_mode type, it is recommended to copy the ENTERPRISE app mode)
+  let entRegex = new RegExp('enterprise*', 'gi');
+  if (entRegex.test(app_mode.toLocaleLowerCase())) {
     var rset = snowflake.execute({sqlText:`SELECT consumer_name FROM UTIL_APP.METADATA_C_V;`});
     rset.next();
     consumer_name = rset.getColumnValue(1);
   }
    
   try {
-    
-    //check provider metadata to for previous install via app key.  if there is not an app key or there is an app key and it is different from local app key, then pick up existing logs/metrics.  we do not want existing logs from a previous install
-    var rset = snowflake.execute({sqlText: `SELECT value FROM METADATA.METADATA_V WHERE LOWER(key) = 'app_key' AND LOWER(account_locator) = LOWER('${account_locator}') AND LOWER(consumer_name) = LOWER('${consumer_name}');`});
-    if(rset.next()) { 
-      let app_key_master = rset.getColumnValue(1);
+    var rset = snowflake.execute({sqlText: `SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'events_shared';`});
+    rset.next();
+    events_shared = rset.getColumnValue(1);
 
-      if(app_key_master != app_key_local) {
-        //When there is an app key stored in the master metadata table, but it does not match the local app key - this is a new install and insert the log messages
-        //If they were the same, then it would not be a new install and there is no need to re-process the logs.
-        log_insert();
-      }
-    } else {
-      //There is not an app key in the master metadata table - this means that this is the first install for this consumer or they are a free consumer, so insert the logs to be processed
+    //call log_insert if value set to no
+    if(events_shared.toLocaleLowerCase() == 'no') {
       log_insert();
+
+      //update app_mode table to set events_shared to yes
+      snowflake.execute({sqlText: `UPDATE APP.APP_MODE SET value = 'yes' WHERE LOWER(key) = 'events_shared';`});
+
+      //log that events have been added to event table.
+      snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'COMPLETE', '"Install events added to event table."');`});
+
+      return `Install events added to event table.`;
+
+    } else {
+      return `No action taken.  Install events are already added to event table`;
     }
-
-    return `logs added to event table`;
-
   } catch (err) {
     var result = `Failed: Code: `+err.code + ` State: `+err.state+` Message: `+err.message.replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ")+` Stack Trace:`+ err.stack.toString().replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ");
 
@@ -749,7 +756,9 @@ CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.REQUEST(parameters VARCHAR)
     consumer_name = rset.getColumnValue(1);
   }
   
-  if (app_mode.toLocaleLowerCase() == 'enterprise') {
+  //check for either enterprise or an optional demo mode (if adding a demo app_mode type, it is recommended to copy the ENTERPRISE app mode)
+  let entRegex = new RegExp('enterprise*', 'gi');
+  if (entRegex.test(app_mode.toLocaleLowerCase())) {
     var rset = snowflake.execute({sqlText:`SELECT consumer_name FROM UTIL_APP.METADATA_C_V;`});
     rset.next();
     consumer_name = rset.getColumnValue(1);
@@ -1185,7 +1194,7 @@ try {
   $$
 ;
 
-GRANT USAGE ON PROCEDURE PROCS_APP.REQUEST(VARCHAR, VARCHAR) TO APPLICATION ROLE APP_ROLE;
+GRANT USAGE ON PROCEDURE PROCS_APP.REQUEST(VARCHAR) TO APPLICATION ROLE APP_ROLE;
 
 
 
