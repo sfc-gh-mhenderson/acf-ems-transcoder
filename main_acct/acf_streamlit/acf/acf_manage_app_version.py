@@ -232,7 +232,7 @@ $$;
        p_target_path = p_df.loc[p_df['property'] == 'target_path', 'value'].values[0]
        p_target_path_str = ""
        
-       if p_target_path:
+       if p_target_path != '[]':
          p_target_path_str = f"""TARGET_PATH = ({', '.join(["'{}'".format(value) for value in p_imports.strip('][').split(",")])})"""
 
        proc_str += f"""CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.{p_name}{p_signature}

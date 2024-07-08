@@ -87,7 +87,11 @@ CREATE TABLE IF NOT EXISTS APP.APP_MODE(key VARCHAR, value VARCHAR);
 
 INSERT INTO APP.APP_MODE VALUES 
 ('app_mode', 'free')
-;
+,('events_shared', 'no');
+
+--create METRICS table
+CREATE TABLE IF NOT EXISTS APP.METRICS(msg VARIANT);
+ALTER TABLE APP.METRICS SET COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"test_consuemr_metrics"}';
 
 --create LIMIT_TRACKER table
 CREATE TABLE IF NOT EXISTS APP.LIMIT_TRACKER(key VARCHAR, value VARCHAR);
@@ -160,6 +164,79 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.APP_LOGGER(account_locator VARCHAR, consume
   }
   $$
 ;
+
+--create metrics_logger procedure to log stats to the metrics table
+CREATE OR REPLACE PROCEDURE UTIL_APP.METRICS_LOGGER(account_locator VARCHAR, consumer_name VARCHAR, app_key VARCHAR, app_mode VARCHAR, entry_type VARCHAR, event_type VARCHAR, event_attributes VARCHAR, timestamp TIMESTAMP_NTZ, status VARCHAR, message VARCHAR)
+  RETURNS VARCHAR
+  LANGUAGE JAVASCRIPT
+  COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"provider","component":"test_consumer_app_logger"}}'
+  EXECUTE AS OWNER
+  AS 
+  $$
+  
+  try {
+      //add new msg to metrics table
+      snowflake.execute({sqlText: `INSERT INTO APP.METRICS(msg) SELECT PARSE_JSON(
+                                        '{
+                                            "account":"${ACCOUNT_LOCATOR}",
+                                            "app_code":"[[APP_CODE]]",
+                                            "consumer_name":"${CONSUMER_NAME}",
+                                            "app_key":"${APP_KEY}",
+                                            "app_mode":"${APP_MODE}",
+                                            "entry_type":"${ENTRY_TYPE}",
+                                            "event_type":"${EVENT_TYPE}",
+                                            "event_attributes":${EVENT_ATTRIBUTES.replace(/\'/g, "\\'")},
+                                            "timestamp":"'||SYSDATE()||'",
+                                            "status":"${STATUS}",
+                                            "message":'||TRIM(\$\$ ${MESSAGE}\$\$)||'
+                                        }')`});
+
+      return `Logged: ${MESSAGE}`;
+  } catch (err) {
+    var result = `Failed: Code: `+err.code + ` State: `+err.state+` Message: `+err.message.replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ")+` Stack Trace:`+ err.stack.toString().replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ");
+
+    //log error
+    snowflake.log('error', `${result}`);
+ 
+    return `Error: ${result}`;
+  }
+  $$
+;
+
+CREATE OR REPLACE PROCEDURE UTIL_APP.CUSTOM_EVENT_BILLING(class_name VARCHAR, subclass_name VARCHAR, start_timestamp FLOAT, timestamp FLOAT, base_charge FLOAT, objects VARCHAR, additional_info VARCHAR)
+  RETURNS VARCHAR
+  LANGUAGE JAVASCRIPT
+  COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"provider","component":"test_consumer_event_billing"}}'
+  EXECUTE AS OWNER
+  AS
+  $$
+    /**
+      * Format timestamps as Unix timestamps in milliseconds
+    */
+
+    try {
+      var rset = snowflake.execute({sqlText: `SELECT SYSTEM$CREATE_BILLING_EVENT('${CLASS_NAME}',
+                                                    '${SUBCLASS_NAME}',
+                                                    ${START_TIMESTAMP},
+                                                    ${TIMESTAMP},
+                                                    ${BASE_CHARGE},
+                                                    '${OBJECTS}',
+                                                    '${ADDITIONAL_INFO}');`});
+      rset.next()
+      var msg = rset.getColumnValue(1);
+
+      return msg;
+
+      } catch(err) {
+          var result = `Failed: Code: `+err.code + ` State: `+err.state+` Message: `+err.message.replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ")+` Stack Trace:`+ err.stack.toString().replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ");
+
+          //log error
+          snowflake.log('error', `${result}`);
+      
+          return `Error: ${result}`;
+      }
+  $$
+  ;
 
 --unset vars
 UNSET (ACF_ADMIN_ROLE, SOURCE_DB, ACF_WH);
