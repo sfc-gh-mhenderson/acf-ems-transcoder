@@ -129,7 +129,9 @@ CREATE OR REPLACE PROCEDURE ENRICH(INPUT_TABLE_NAME VARCHAR, MATCH_KEY VARCHAR, 
         consumer_name = rset.getColumnValue(1);
       }
       
-      if (app_mode.toLocaleLowerCase() == 'enterprise') {
+      //check for either enterprise or an optional demo mode (if adding a demo app_mode type, it is recommended to copy the ENTERPRISE app mode)
+      let entRegex = new RegExp('enterprise*', 'gi');
+      if (entRegex.test(app_mode.toLocaleLowerCase())) {
         var rset = snowflake.execute({sqlText:`SELECT consumer_name FROM UTIL_APP.METADATA_C_V;`});
         rset.next();
         consumer_name = rset.getColumnValue(1);

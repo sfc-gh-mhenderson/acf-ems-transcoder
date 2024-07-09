@@ -23,11 +23,19 @@ ALTER TABLE APP.APP_KEY SET COMMENT = '{"origin":"sf_sit","name":"acf","version"
 GRANT SELECT ON TABLE APP.APP_KEY TO APPLICATION ROLE APP_ROLE;
 
 --create APP_MODE table
-CREATE TABLE IF NOT EXISTS APP.APP_MODE(key VARCHAR, value VARCHAR);
+CREATE TABLE IF NOT EXISTS APP.APP_MODE(key VARCHAR, value VARCHAR) AS
+WITH app_mode_cte AS (
+select $1 AS key
+        ,$2 as value
+    FROM 
+    (VALUES  
+     ('app_mode', '[[APP_MODE]]')
+     ,('events_shared', 'no')
+    )
+)
+SELECT * FROM app_mode_cte;
+
 ALTER TABLE APP.APP_MODE SET COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":"app_mode"}';
-INSERT INTO EXISTS APP.APP_MODE VALUES
-('app_mode', '[[APP_MODE]]')
-,('events_shared', 'no');
 GRANT SELECT ON TABLE APP.APP_MODE TO APPLICATION ROLE APP_ROLE;
 
 --create METRICS table
