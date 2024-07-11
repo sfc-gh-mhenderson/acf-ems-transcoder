@@ -42,7 +42,7 @@ USE WAREHOUSE IDENTIFIER($ACF_WH);
 USE DATABASE IDENTIFIER($ACF_DB);
 
 //set default allowed proc
-UPDATE METADATA.METADATA_DICTIONARY SET default_value = 'enrich' WHERE LOWER(control_name) = 'allowed_procs'
+UPDATE METADATA.METADATA_DICTIONARY SET default_value = 'enrich' WHERE LOWER(control_name) = 'allowed_procs';
 
 USE DATABASE IDENTIFIER($SOURCE_DB);
 
