@@ -1319,7 +1319,7 @@ class promote_to_prod_page(BasePage):
         st.write("#")
 
         #TODO:  select application package to use to promote to prod
-        app_pkgs = pd.DataFrame(session.sql(f"SELECT * FROM P_{st.session_state.app_code}_ACF_DB.ACF_STREAMLIT.VERSION_HISTORY ORDER BY APPLICATION_PACKAGE, VERSION, PATCH DESC").collect())
+        app_pkgs = pd.DataFrame(session.sql(f"SELECT * FROM P_{st.session_state.app_code}_ACF_DB.ACF_STREAMLIT.VERSION_HISTORY ORDER BY APPLICATION_PACKAGE, VERSION, CAST(PATCH AS NUMBER(38,0)) DESC").collect())
     
         if not app_pkgs.empty:
             select_app_pkg = st.selectbox("Select Application Package:", app_pkgs["APPLICATION_PACKAGE"].drop_duplicates(), key="promote_select_app_pkg")
