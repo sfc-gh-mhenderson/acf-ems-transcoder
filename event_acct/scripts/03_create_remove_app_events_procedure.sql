@@ -12,7 +12,7 @@ Used By:            Provider
 Parameter(s):       app_codes ARRAY - array of app_codes to remove app events for
 Usage:              CALL EVENTS.EVENTS.REMOVE_APP_EVENTS(TO_ARRAY('<app_codes>'));
 
-Copyright © 2024 Snowflake Inc. All rights reserved
+Copyright © 2025 Snowflake Inc. All rights reserved
 
 *************************************************************************************************************
 SUMMARY OF CHANGES
@@ -27,14 +27,17 @@ Date(yyyy-mm-dd)    Author                              Comments
 !print Begin 03_create_remove_app_events_procedure.sql
 !print **********
 
+--set session vars
+SET EVENT_WH = '&{APP_CODE}_EVENTS_WH';
+
 USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE EVENTS_WH;
+USE WAREHOUSE IDENTIFIER($EVENT_WH);
 USE DATABASE EVENTS;
 
 CREATE OR REPLACE PROCEDURE EVENTS.REMOVE_APP_EVENTS(app_codes ARRAY)
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
-COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"provider","component":"remove_events"}}'
+COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"event_acct","component":"remove_events","type":"procedure"}}'
 EXECUTE AS CALLER
 AS
 $$
@@ -57,7 +60,10 @@ $$
       snowflake.execute({sqlText: `DROP SHARE IF EXISTS ${app_code}_EVENTS_FROM_${current_region}_SHARE;`});
 
       //drop events database shared to acf account
-      snowflake.execute({sqlText: `DROP DATABASE IF EXISTS ${app_code}_EVENTS_FROM_${current_region};`});  
+      snowflake.execute({sqlText: `DROP DATABASE IF EXISTS ${app_code}_EVENTS_FROM_${current_region};`}); 
+
+      //drop events warehouse
+      snowflake.execute({sqlText: `DROP WAREHOUSE IF EXISTS ${app_code}_EVENTS_WH;`}); 
     }
 
     //return to least privilged role
@@ -78,7 +84,7 @@ $$
 ;
 
 --unset vars
-UNSET (EVENT_WH, EVENT_DB);
+UNSET (EVENT_WH);
 
 !print **********
 !print End 03_create_remove_app_events_procedure.sql

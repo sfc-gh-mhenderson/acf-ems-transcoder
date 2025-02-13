@@ -14,7 +14,7 @@ Used By:            Provider
 Parameter(s):       N/A
 Usage:              CALL EVENTS.EVENTS.REMOVE_ALL_EVENTS();
 
-Copyright © 2024 Snowflake Inc. All rights reserved
+Copyright © 2025 Snowflake Inc. All rights reserved
 
 *************************************************************************************************************
 SUMMARY OF CHANGES
@@ -29,14 +29,17 @@ Date(yyyy-mm-dd)    Author                              Comments
 !print Begin 04_create_remove_all_events_procedure.sql
 !print **********
 
+--set session vars
+SET EVENT_WH = '&{APP_CODE}_EVENTS_WH';
+
 USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE EVENTS_WH;
+USE WAREHOUSE IDENTIFIER($EVENT_WH);
 USE DATABASE EVENTS;
 
 CREATE OR REPLACE PROCEDURE EVENTS.REMOVE_ALL_EVENTS()
 RETURNS VARCHAR
 LANGUAGE JAVASCRIPT
-COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":6},"attributes":{"role":"provider","component":"remove_events"}}'
+COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"event_acct","component":"remove_events","type":"procedure"}}'
 EXECUTE AS CALLER
 AS
 $$
@@ -84,8 +87,18 @@ $$
     //drop events database, including event table
     snowflake.execute({sqlText: `DROP DATABASE IF EXISTS EVENTS;`});
 
-    //drop events warehouse
-    snowflake.execute({sqlText: `DROP WAREHOUSE IF EXISTS EVENTS_WH;`});
+    //drop remaining events warehouses
+    snowflake.execute({sqlText: `SHOW WAREHOUSES LIKE '%_EVENTS_WH';`});
+    var rset = snowflake.execute({sqlText: `SELECT "name" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));`});
+
+    while(rset.next()){
+      var warehouse = rset.getColumnValue(1);
+
+      //drop warehouse
+      snowflake.execute({sqlText: `DROP WAREHOUSE IF EXISTS ${warehouse};`});
+    }
+
+
 
     //return to least privilged role
     snowflake.execute({sqlText: `USE ROLE PUBLIC;`});
@@ -103,6 +116,9 @@ $$
     }
 $$
 ;
+
+--unset vars
+UNSET (EVENT_WH);
 
 !print **********
 !print End 04_create_remove_all_events_procedure.sql

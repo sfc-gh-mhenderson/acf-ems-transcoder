@@ -7,7 +7,7 @@ Called by:          SCRIPT(S):
                         framework/setup/setup.sh
 Calls:              SCRIPTS:
                         scripts/01_account_setup.sql
-                        scripts/02_create_stream_events_procedure.sql
+                        scripts/02_create_events_dt_procedure.sql
                         scripts/03_create_remove_app_events_procedure.sql
                         scripts/04_create_remove_all_events_procedure.sql
 
@@ -19,6 +19,8 @@ Date(yyyy-mm-dd)    Author                              Comments
 2023-03-14          Marc Henderson                      Initial build
 2024-02-29          Marc Henderson                      Added REMOVE_ALL_EVENTS proc (renamed REMOVE_EVENTS 
                                                         proc to REMOVE_APP_EVENTS)
+2024-11-11          Marc Henderson                      Renamed 02_create_stream_events_procedure.sql to 
+                                                        02_create_events_dt_procedure.sql
 *************************************************************************************************************/
 
 !set exit_on_error=True;
@@ -27,8 +29,8 @@ Date(yyyy-mm-dd)    Author                              Comments
 --account setup
 !source  ../scripts/01_account_setup.sql
 
---create STREAM_EVENTS procedure
-!source  ../scripts/02_create_stream_events_procedure.sql
+--create/call EVENTS_DT procedure
+!source  ../scripts/02_create_events_dt_procedure.sql
 
 --create REMOVE_APP_EVENTS procedure
 !source  ../scripts/03_create_remove_app_events_procedure.sql
