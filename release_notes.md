@@ -1,5 +1,23 @@
 Release Notes:
 
+Release 1.7
+Key features:
+- Trust Center Integration
+    - Native app providers now have the ability to enforce security requirements for consumer accounts, using the consumer's Trust Center `FINDINGS` Snowflake Account Usage view, before allowing access to their native app.
+    - Providers can choose whether to use Trust Center to control access to their app and which Scanners to use, via the App Control Manager Streamlit UI.
+- Native Apps Events Sharing Updates
+    - The Snowflake Events API now allows native app providers the ability to specify the level of events the consumer is required to share with the provider.
+- Sidecar Removal
+    - With the updates to native app event sharing, Sidecar is no longer needed, and has been removed.
+- Migration to Dynamic Tables
+    - Where possible, the ACF will leverage Dynamic Tables, instead of Streams/Tasks.
+- Installer Notebooks
+    - The ACF now includes a set of notebooks that streamline the "out-of-the-box" ACF deployment process.
+    
+Improvements:
+- Sidecar removal reduces the amount of setup steps the consumer has to execute to configure the native app.
+- Installer Notebooks allows developers to easily deploy the latest ACF, without using SnowSQL or executing several scripts in Snowsight Worksheets.
+
 Release 1.6
 Key features:
 - DEV and PROD environment support

@@ -2,8 +2,8 @@
 #script         :setup.sh
 #create_date    :2022-04-06
 #author         :Marc Henderson
-#description    :This script uses SnowSQL to run the necessary scripts in the Provider's Event Account to
-#                create the event table.
+#description    :This script uses SnowSQL to run the necessary scripts in the Provider's Account to
+#                create the ACF objects.
 #usage          :./setup.sh <relative_path_to_config_file>
 #notes          :This should be ran once on Provider's account.
 
@@ -13,7 +13,10 @@
 #summary of changes
 #date(yyyy-mm-dd)     author                              comments
 #----------------     -------------------------------     -------------------------------------------------
-#2022-10-09           Marc Henderson                      Initial build
+#2022-03-14           Marc Henderson                      Initial build
+#2023-05-01           Marc Henderson                      Removed unused parameters
+#2023-06-28           Marc Henderson                      Removed SOURCE_TABLE_LIST, added DIR
+#2023-10-09           Marc Henderson                      Renamed ACCOUNT_LOCATOR to ACF_ACCOUNT_LOCATOR
 #==========================================================================================================
 
 file=$1
@@ -32,21 +35,9 @@ else
                 DIR=$value
                 printf '%s\n' "${parameter} = ${DIR}"
                 ;;
-            ORG_NAME)
-                ORG_NAME=$value
-                printf '%s\n' "${parameter} = ${ORG_NAME}"
-                ;;
             ACF_ACCOUNT_LOCATOR)
                 ACF_ACCOUNT_LOCATOR=$value
                 printf '%s\n' "${parameter} = ${ACF_ACCOUNT_LOCATOR}"
-                ;;
-            ACF_ACCOUNT_NAME)
-                ACF_ACCOUNT_NAME=$value
-                printf '%s\n' "${parameter} = ${ACF_ACCOUNT_NAME}"
-                ;;
-            EVENT_ACCOUNT_LOCATOR)
-                EVENT_ACCOUNT_LOCATOR=$value
-                printf '%s\n' "${parameter} = ${EVENT_ACCOUNT_LOCATOR}"
                 ;;  
             APP_CODE)
                 APP_CODE=$value
@@ -61,13 +52,10 @@ else
   cd "${0%/*}"
 
   #Native App setup
-  snowsql -c $EVENT_ACCOUNT_LOCATOR \
+  snowsql -c $ACF_ACCOUNT_LOCATOR \
           -f sql/setup.sql \
           -D DIR=$DIR \
-          -D ORG_NAME=$ORG_NAME \
           -D ACF_ACCOUNT_LOCATOR=$ACF_ACCOUNT_LOCATOR \
-          -D ACF_ACCOUNT_NAME=$ACF_ACCOUNT_NAME \
-          -D EVENT_ACCOUNT_LOCATOR=$EVENT_ACCOUNT_LOCATOR \
           -D APP_CODE=$APP_CODE \
           -o output_format=plain \
           -o header=False
