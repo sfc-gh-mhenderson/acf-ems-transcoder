@@ -15,8 +15,8 @@ Key features:
     - The ACF now includes a set of notebooks that streamline the "out-of-the-box" ACF deployment process.
     
 Improvements:
-    - Sidecar removal reduces the amount of setup steps the consumer has to execute to configure the native app.
-    - Installer Notebooks allows developers to easily deploy the latest ACF, without using SnowSQL or executing several scripts in Snowsight Worksheets.
+- Sidecar removal reduces the amount of setup steps the consumer has to execute to configure the native app.
+- Installer Notebooks allows developers to easily deploy the latest ACF, without using SnowSQL or executing several scripts in Snowsight Worksheets.
 
 Release 1.6
 Key features:
