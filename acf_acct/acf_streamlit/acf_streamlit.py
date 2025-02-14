@@ -403,7 +403,7 @@ class manage_app_controls_page(BasePage):
 
         controls_updated = False
         
-        df_controls_edited = st.experimental_data_editor(pd.DataFrame(session.sql("SELECT * FROM METADATA.METADATA_DICTIONARY").collect()), num_rows= "dynamic")
+        df_controls_edited = st.data_editor(pd.DataFrame(session.sql("SELECT * FROM METADATA.METADATA_DICTIONARY").collect()), num_rows= "dynamic")
         df_controls_snowpark = session.create_dataframe(df_controls_edited)
 
         st.write("#")
@@ -456,7 +456,7 @@ class manage_app_rules_page(BasePage):
 
         st.subheader("Current Rules:")
         st.caption("Existing rules can modified here.")
-        df_update_rules_edited = st.experimental_data_editor(pd.DataFrame(session.sql("SELECT * FROM METADATA.RULES_DICTIONARY").collect()), num_rows= "dynamic")
+        df_update_rules_edited = st.data_editor(pd.DataFrame(session.sql("SELECT * FROM METADATA.RULES_DICTIONARY").collect()), num_rows= "dynamic")
         df_update_rules_snowpark = pd.DataFrame()
         
         if not df_update_rules_edited.empty:
@@ -585,7 +585,7 @@ class manage_app_rules_page(BasePage):
                     if remove_group:
                         st.session_state[f"rule_{i+1}_group_counter"] -= 1
                         del st.session_state["rules_dict"][f"rule_{i+1}"][f"group_{j+1}"]
-                        st.experimental_rerun()
+                        st.rerun()
                     
                     for k in range(st.session_state[f"rule_{i+1}_group_{j+1}_condition_counter"]):
 
@@ -631,7 +631,7 @@ class manage_app_rules_page(BasePage):
                             for k in range(st.session_state[f"rule_{i+1}_group_{j+1}_condition_counter"]):
                                 if f"condition_{k+1}" not in st.session_state["rules_dict"][f"rule_{i+1}"][f"group_{j+1}"]:
                                     st.session_state["rules_dict"][f"rule_{i+1}"][f"group_{j+1}"][f"condition_{k+1}"] = {}
-                                    st.experimental_rerun()
+                                    st.rerun()
         
                         if remove_cond:
                             st.session_state[f"rule_{i+1}_group_{j+1}_condition_counter"] -= 1
@@ -642,7 +642,7 @@ class manage_app_rules_page(BasePage):
                                 if c not in st.session_state["rules_dict"][f"rule_{i+1}"][f"group_{j+1}"].values():
                                     st.session_state[f"rule_{i+1}_group_{j+1}_arr"].remove(c)
                             
-                            st.experimental_rerun()
+                            st.rerun()
 
                     #add rule group arr to rules dictionary
                     if st.session_state[f"rule_{i+1}_group_{j+1}_arr"] not in st.session_state["rules_dict"][f"rule_{i+1}"]["groups"]["groups"]:
@@ -651,7 +651,7 @@ class manage_app_rules_page(BasePage):
                 if remove_rule:
                     st.session_state.rule_counter -= 1
                     del st.session_state["rules_dict"][f"rule_{i+1}"]
-                    st.experimental_rerun()
+                    st.rerun()
 
        
 
@@ -693,7 +693,7 @@ class manage_app_rules_page(BasePage):
                 df_add_rules_snowpark.write.mode("append").save_as_table("METADATA.RULES_DICTIONARY",)
             st.success("Rules added successfully 🎉")
             time.sleep(2)
-            st.experimental_rerun()
+            st.rerun()
 
         st.write("#")
         st.write("#")
@@ -939,7 +939,7 @@ class new_app_package_page(BasePage):
             st.success(f"Application Package {st.session_state.new_app_pkg_name} successfully created 🎉")
             time.sleep(2)
             set_page("home")
-            st.experimental_rerun()
+            st.rerun()
             
     def print_sidebar(self):
         pass
@@ -1298,7 +1298,7 @@ class app_package_version_page(BasePage):
             st.success(f"{version_option} for Application Package {st.session_state.manage_app_pkg_name} Version: {version} successful 🎉")
             time.sleep(2)
             set_page("home")
-            st.experimental_rerun()
+            st.rerun()
             
             
     def print_sidebar(self):
@@ -1364,7 +1364,7 @@ class promote_to_prod_page(BasePage):
                     st.success(f"Application Package {select_app_pkg}, Version: {select_vers}, Patch {select_patch} successfully promoted to PROD 🎉")
                     time.sleep(2)
                     set_page("home")
-                    st.experimental_rerun()
+                    st.rerun()
 
 
         st.write("#")
@@ -1438,7 +1438,7 @@ class app_package_drop_page(BasePage):
             st.success(f"Application Package {st.session_state.drop_app_pkg_name} successfully dropped 🎉")
             time.sleep(3)
             set_page("home")
-            st.experimental_rerun()  
+            st.rerun()  
             
     def print_sidebar(self):
         pass
@@ -1498,7 +1498,7 @@ class trust_center_page(BasePage):
             de_scanner_height = int((len(df_tc_scanners) + 1.5) * 35 + 3.5)
             
             #de_tc_scanners = st.data_editor(
-            de_tc_scanners = st.experimental_data_editor(
+            de_tc_scanners = st.data_editor(
                 df_tc_scanners
                 ,height=de_scanner_height
                 ,width=1500
@@ -1599,7 +1599,7 @@ class trust_center_page(BasePage):
             st.success(f"Trust Center settings successfully updated 🎉")
             time.sleep(2)
             set_page("home")
-            st.experimental_rerun()
+            st.rerun()
             
     def print_sidebar(self):
         pass
@@ -1752,7 +1752,7 @@ class onboard_consumer_page(BasePage):
 
                     if btn_remove_consumer:
                         st.session_state.onboard_consumer_counter -= 1
-                        st.experimental_rerun()
+                        st.rerun()
 
                 st.session_state[f"onboard_consumer_{i+1}_account"] = st.text_input("Consumer Account:", key=f"oc_{i+1}_acct")
                 st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"].update({"consumer_account": st.session_state[f"onboard_consumer_{i+1}_account"]})
@@ -1855,7 +1855,7 @@ class onboard_consumer_page(BasePage):
             st.success(f"Consumer(s) onboarded successfully 🎉")
             time.sleep(3)
             set_page("home")
-            st.experimental_rerun()  
+            st.rerun()  
 
             
         
@@ -2041,7 +2041,7 @@ class manage_consumer_controls_page(BasePage):
             st.success(f"Consumer control(s) updated successfully 🎉")
             time.sleep(3)
             set_page("home")
-            st.experimental_rerun()  
+            st.rerun()  
 
             
         
@@ -2117,7 +2117,7 @@ class re_enable_consumer_page(BasePage):
                 st.success(f"Consumer(s) re-enabled successfully 🎉")
                 time.sleep(3)
                 set_page("home")
-                st.experimental_rerun()  
+                st.rerun()  
 
 
 
@@ -2201,7 +2201,7 @@ class remove_consumer_page(BasePage):
                 st.success(f"Consumer(s) removed successfully 🎉")
                 time.sleep(3)
                 set_page("home")
-                st.experimental_rerun()  
+                st.rerun()  
 
 
 
@@ -2238,7 +2238,7 @@ class remove_acf_page(BasePage):
                 with st.spinner("Updating..."):
                     remove_acf(st.session_state.app_code)
                 st.success(f"App removed successfully 🎉")
-                st.experimental_rerun() 
+                st.rerun() 
 
         st.write("#")
         st.write("#")

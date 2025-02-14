@@ -10,7 +10,7 @@ In addition, the Provider can control which function(s)/stored procedure(s) the 
 ![Application Control Framework Design](img/acf_reference_architecture.png)
 
 ## Prerequisites:
-- Download and install the latest version of SnowSQL.
+- Download and install the latest version of SnowSQL (**if modifying the AS-IS deployment code**).
 - The Provider must accept the Snowflake Marketplace Provider Terms of Service.
 - The Consumer must accept the Snowflake Marketplace Consumer Terms of Service.
 - The Provider must create an account that stores their native app and Application Control Framework objects.

@@ -128,8 +128,8 @@ def request(app_name, app_mode, ref_name, input_ref):
                 result = pd.DataFrame(call_request).iloc[0]['REQUEST']
                 
                 if 'ERROR:' in result:
-                    st.error("**Call Failed**");
-                    st.write(result);
+                    st.error("**Call Failed**", icon="🚨")
+                    st.write(result)
                 else :
                     st.success(f"Enrichment complete 🎉. Results are in table: {app_name}.RESULTS_APP.{results_table}")
                     time.sleep(3)
@@ -143,11 +143,11 @@ def save_form(app_name):
     empty_fields = [column for column in columns_to_check if not st.session_state[column]]
 
     if empty_fields:
-        st.error(f"Please fill in the following required fields: {', '.join(empty_fields)}")
+        st.error(f"Please fill in the following required fields: {', '.join(empty_fields)}", icon="🚨")
     else:
         # Additional checks for 'Other' and 'contact_reason_text'
         if st.session_state.contact_reason == 'Other' and st.session_state.contact_reason_text == '':
-            st.error("Please input Contact Reason Text")
+            st.error("Please input Contact Reason Text", icon="🚨")
         else:
             # Clear 'contact_reason_text' if 'contact_reason' is not 'Other'
             if st.session_state.contact_reason != 'Other':
@@ -209,136 +209,140 @@ class home(BasePage):
         consumer_name = ''
         app_key_metadata = ''
         app_key_local = ''
+        
+        app_name = pd.DataFrame(session.sql("SELECT CURRENT_DATABASE()").collect()).iloc[0,0]
+        df_metadata_c_v = pd.DataFrame(session.sql(f"SELECT account_locator FROM {app_name}.UTIL_APP.METADATA_C_V").collect())
+        
+        if not df_metadata_c_v.empty:
+            try :
+                app_mode = pd.DataFrame(session.sql("SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'app_mode'").collect()).iloc[0,0]
+                account_locator = pd.DataFrame(session.sql(f"SELECT account_locator FROM {app_name}.UTIL_APP.METADATA_C_V LIMIT 1").collect()).iloc[0,0]
+                consumer_name =  pd.DataFrame(session.sql(f"SELECT consumer_name FROM {app_name}.UTIL_APP.METADATA_C_V LIMIT 1;").collect()).iloc[0,0]
+                app_key_metadata= pd.DataFrame(session.sql(f"SELECT LOWER(value) FROM {app_name}.METADATA.METADATA_V WHERE LOWER(key) = 'app_key' AND LOWER(account_locator) = LOWER('{account_locator}') AND LOWER(consumer_name) = LOWER('{consumer_name}')").collect()).iloc[0,0]   
+                app_key_local= pd.DataFrame(session.sql(f"SELECT LOWER(app_key) FROM {app_name}.APP.APP_KEY").collect()).iloc[0,0] 
+            except :
+                st.experimental_rerun()
 
-        try :
-            app_mode = pd.DataFrame(session.sql("SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'app_mode'").collect()).iloc[0,0]
-            app_name = pd.DataFrame(session.sql("SELECT CURRENT_DATABASE()").collect()).iloc[0,0]
-            account_locator = pd.DataFrame(session.sql(f"SELECT account_locator FROM {app_name}.UTIL_APP.METADATA_C_V LIMIT 1").collect()).iloc[0,0]
-            consumer_name =  pd.DataFrame(session.sql(f"SELECT consumer_name FROM {app_name}.UTIL_APP.METADATA_C_V LIMIT 1;").collect()).iloc[0,0]
-            app_key_metadata= pd.DataFrame(session.sql(f"SELECT LOWER(value) FROM {app_name}.METADATA.METADATA_V WHERE LOWER(key) = 'app_key' AND LOWER(account_locator) = LOWER('{account_locator}') AND LOWER(consumer_name) = LOWER('{consumer_name}')").collect()).iloc[0,0]   
-            app_key_local= pd.DataFrame(session.sql(f"SELECT LOWER(app_key) FROM {app_name}.APP.APP_KEY").collect()).iloc[0,0]
+            enable_check  = pd.DataFrame(session.sql(f"SELECT value FROM {app_name}.UTIL_APP.METADATA_C_V WHERE LOWER(key) = 'enabled'").collect()).iloc[0,0]
+            trust_center_enforcement = pd.DataFrame(session.sql(f"SELECT value FROM {app_name}.METADATA.METADATA_V WHERE LOWER(key) = 'trust_center_enforcement'").collect()).iloc[0,0]
+            events_shared = pd.DataFrame(session.sql(f"SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'events_shared'").collect()).iloc[0,0]
+            tracker_configured = pd.DataFrame(session.sql(f"SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'tracker_configured'").collect()).iloc[0,0]
+            trust_center_access = pd.DataFrame(session.sql(f"SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'trust_center_access'").collect()).iloc[0,0]
             run_count = pd.DataFrame(session.sql(f"SELECT COUNT(*) FROM APP.RUN_TRACKER").collect()).iloc[0,0]
-        except :
-            st.experimental_rerun()
-
-        enable_check  = pd.DataFrame(session.sql(f"SELECT value FROM {app_name}.UTIL_APP.METADATA_C_V WHERE LOWER(key) = 'enabled'").collect()).iloc[0,0]
-        trust_center_enforcement = pd.DataFrame(session.sql(f"SELECT value FROM {app_name}.METADATA.METADATA_V WHERE LOWER(key) = 'trust_center_enforcement'").collect()).iloc[0,0]
-        
-        events_shared = pd.DataFrame(session.sql(f"SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'events_shared'").collect()).iloc[0,0]
-        tracker_configured = pd.DataFrame(session.sql(f"SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'tracker_configured'").collect()).iloc[0,0]
-        trust_center_access = pd.DataFrame(session.sql(f"SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'trust_center_access'").collect()).iloc[0,0]
-        
-
-        if events_shared.lower() == 'n' or (app_mode.lower() != 'free' and tracker_configured.lower() == 'n'):
-            st.error('Please complete installation by running the setup script found in the ⓘ icon in the top right of the page.')
-        elif trust_center_enforcement.lower() == 'y' and trust_center_access.lower() == 'n':
-            st.error('Trust Center Access has not been granted. Please ensure the appropriate grants were executed in the setup script found in the ⓘ icon in the top right of the page.')
-        elif (app_key_metadata == '') or (app_key_metadata != app_key_local):
-            st.warning("Please wait a moment while we finish onboarding your account. This automated process may take a few minutes. If you continue to have issues, please contact us immediately.")
-            st.button('Contact Us', key='contact_1', type="primary", on_click=set_page,args=("contact",))
-        elif len(enable_check) > 0:
-            if enable_check.lower()  == 'y':
-                if "reference_tables" not in st.session_state:
-                    st.session_state.reference_tables = {}
-
-                if "reference_views" not in st.session_state:    
-                    st.session_state.reference_views = {}
-
-                if "pickedObj" not in st.session_state:
-                    st.session_state.pickedObj = ''
-
-                if "ref" not in st.session_state:
-                    st.session_state.ref = ''
-
-                if "refs_selected" not in st.session_state:
-                    st.session_state.refs_selected = {}
-
-                if "btn_clicked" not in st.session_state:
-                    st.session_state.btn_clicked = ''
-                
-                st.header(f"App Version: {app_mode.upper()}")
-                st.write("#")
-                st.subheader("Please Select a Table or View to Enrich.")
-
-                reference_association_tbl = permissions.get_reference_associations("enrichment_table")
-                reference_association_vw = permissions.get_reference_associations("enrichment_view")
-
-                if len(reference_association_tbl) == 0 and len(reference_association_vw) == 0 :   
-                    st.warning("""Please Select a Table or View""")
-                else:
-                    if len(reference_association_tbl) > 0:   
-                        ref_tables = {}
-                        for table in reference_association_tbl:
-                            sqlstring = f"""show columns in table reference('enrichment_table','{table}')"""
-                            table_info = pd.DataFrame(session.sql(sqlstring).collect())
-                            ref_tables[table_info["table_name"].iloc[0]] = table
-                            st.session_state.upload_type = 'table'
-                        st.session_state.reference_tables = ref_tables
-
-                    if len(reference_association_vw) > 0:   
-                        ref_views = {}
-                        for view in reference_association_vw:
-                            sqlstring = f"""show columns in table reference('enrichment_view','{view}')"""
-                            view_info = pd.DataFrame(session.sql(sqlstring).collect())
-                            ref_views[view_info["table_name"].iloc[0]] = view
-                            
-                            #only set the upload type to 'view' when Select View is clicked
-                            if st.session_state.btn_clicked == 'view':
-                                st.session_state.upload_type = 'view' 
-                        st.session_state.reference_views = ref_views
-
-                col1, col2, col3, col4 = st.columns(4, gap="small")
-
-                clicked_tbl = False
-                clicked_vw = False
-
-                with col1:  
-                    clicked_tbl = st.button("Select Table")
-                with col2:
-                    clicked_vw = st.button("Select View")       
-
-                if clicked_tbl:
-                    st.session_state.btn_clicked = 'table'
-                    st.session_state.upload_type = 'table'
-                    permissions.request_reference("enrichment_table")
-                    
-                if clicked_vw:
-                    st.session_state.btn_clicked = 'view'
-                    st.session_state.upload_type = 'view'
-                    permissions.request_reference("enrichment_view")
-
-                if "upload_type" in st.session_state:
-                    upType = st.session_state.upload_type
-                    if(upType == "table"):
-                        st.session_state.ref = 'enrichment_table'
-                        st.session_state.refs_selected = st.session_state.reference_tables
-                    if(upType == "view"):
-                        st.session_state.ref = 'enrichment_view'
-                        st.session_state.refs_selected = st.session_state.reference_views
-
-                    #set selectbox text and values based on selected object
-                    st.session_state.pickedObj = st.selectbox(f"{upType.capitalize()}",st.session_state.refs_selected.keys())
-
-                    if(st.session_state.pickedObj):
-                        st.write(f"You have chosen {upType}: {st.session_state.pickedObj}")
-                        #call request
-                        request(app_name, app_mode, st.session_state.ref, st.session_state.refs_selected[st.session_state.pickedObj])
-            else:
-                st.warning("Your app usage has been disabled. Please contact us if you would like to re-enable your app usage.")
-                st.button('Contact Us', key='contact_2', type="primary", on_click=set_page,args=("contact",))
             
-            #run history table
-            st.write("#")
-            st.header("Run History")
 
-            if run_count == 0:
-                st.write("No previous runs exist.")
+            if events_shared.lower() == 'n' or tracker_configured.lower() == 'n':
+                st.error('Please complete installation by running the setup script found in the ⓘ icon in the top right of the page.', icon="🚨")
+            elif trust_center_enforcement.lower() == 'y' and trust_center_access.lower() == 'n':
+                st.error('Trust Center Access has not been granted. Please ensure the appropriate grants were executed in the setup script found in the ⓘ icon in the top right of the page.', icon="🚨")
+            elif (app_key_metadata == '') or (app_key_metadata != app_key_local):
+                st.warning("Please wait a moment while we finish onboarding your account. This automated process may take a few minutes. If you continue to have issues, please contact us immediately.")
+                st.button('Contact Us', key='contact_1', type="primary", on_click=set_page,args=("contact",))
+            elif len(enable_check) > 0:
+                if enable_check.lower()  == 'y':
+                    if "reference_tables" not in st.session_state:
+                        st.session_state.reference_tables = {}
+
+                    if "reference_views" not in st.session_state:    
+                        st.session_state.reference_views = {}
+
+                    if "pickedObj" not in st.session_state:
+                        st.session_state.pickedObj = ''
+
+                    if "ref" not in st.session_state:
+                        st.session_state.ref = ''
+
+                    if "refs_selected" not in st.session_state:
+                        st.session_state.refs_selected = {}
+
+                    if "btn_clicked" not in st.session_state:
+                        st.session_state.btn_clicked = ''
+                    
+                    st.header(f"App Version: {app_mode.upper()}")
+                    st.write("#")
+                    st.subheader("Please Select a Table or View to Enrich.")
+
+                    reference_association_tbl = permissions.get_reference_associations("enrichment_table")
+                    reference_association_vw = permissions.get_reference_associations("enrichment_view")
+
+                    if len(reference_association_tbl) == 0 and len(reference_association_vw) == 0 :   
+                        st.warning("""Please Select a Table or View""")
+                    else:
+                        if len(reference_association_tbl) > 0:   
+                            ref_tables = {}
+                            for table in reference_association_tbl:
+                                sqlstring = f"""show columns in table reference('enrichment_table','{table}')"""
+                                table_info = pd.DataFrame(session.sql(sqlstring).collect())
+                                ref_tables[table_info["table_name"].iloc[0]] = table
+                                st.session_state.upload_type = 'table'
+                            st.session_state.reference_tables = ref_tables
+
+                        if len(reference_association_vw) > 0:   
+                            ref_views = {}
+                            for view in reference_association_vw:
+                                sqlstring = f"""show columns in table reference('enrichment_view','{view}')"""
+                                view_info = pd.DataFrame(session.sql(sqlstring).collect())
+                                ref_views[view_info["table_name"].iloc[0]] = view
+                                
+                                #only set the upload type to 'view' when Select View is clicked
+                                if st.session_state.btn_clicked == 'view':
+                                    st.session_state.upload_type = 'view' 
+                            st.session_state.reference_views = ref_views
+
+                    col1, col2, col3, col4 = st.columns(4, gap="small")
+
+                    clicked_tbl = False
+                    clicked_vw = False
+
+                    with col1:  
+                        clicked_tbl = st.button("Select Table")
+                    with col2:
+                        clicked_vw = st.button("Select View")       
+
+                    if clicked_tbl:
+                        st.session_state.btn_clicked = 'table'
+                        st.session_state.upload_type = 'table'
+                        permissions.request_reference("enrichment_table")
+                        
+                    if clicked_vw:
+                        st.session_state.btn_clicked = 'view'
+                        st.session_state.upload_type = 'view'
+                        permissions.request_reference("enrichment_view")
+
+                    if "upload_type" in st.session_state:
+                        upType = st.session_state.upload_type
+                        if(upType == "table"):
+                            st.session_state.ref = 'enrichment_table'
+                            st.session_state.refs_selected = st.session_state.reference_tables
+                        if(upType == "view"):
+                            st.session_state.ref = 'enrichment_view'
+                            st.session_state.refs_selected = st.session_state.reference_views
+
+                        #set selectbox text and values based on selected object
+                        st.session_state.pickedObj = st.selectbox(f"{upType.capitalize()}",st.session_state.refs_selected.keys())
+
+                        if(st.session_state.pickedObj):
+                            st.write(f"You have chosen {upType}: {st.session_state.pickedObj}")
+                            #call request
+                            request(app_name, app_mode, st.session_state.ref, st.session_state.refs_selected[st.session_state.pickedObj])
+                else:
+                    st.warning("Your app usage has been disabled. Please contact us if you would like to re-enable your app usage.")
+                    st.button('Contact Us', key='contact_2', type="primary", on_click=set_page,args=("contact",))
+                
+                #run history table
+                st.write("#")
+                st.header("Run History")
+
+                if run_count == 0:
+                    st.write("No previous runs exist.")
+                else:
+                    runs = pd.DataFrame(session.sql(f"SELECT * FROM APP.RUN_TRACKER").collect())
+                    st.table(runs)
             else:
-                runs = pd.DataFrame(session.sql(f"SELECT * FROM APP.RUN_TRACKER").collect())
-                st.table(runs)
+                st.warning("Please wait a moment while we finish onboarding your account. This automated process may take a few minutes. If you continue to have issues, please contact us immediately.")
+                st.button('Contact Us', key='contact_3', type="primary", on_click=set_page,args=("contact",))         
         else:
-            st.warning("Please wait a moment while we finish onboarding your account. This automated process may take a few minutes. If you continue to have issues, please contact us immediately.")
-            st.button('Contact Us', key='contact_3', type="primary", on_click=set_page,args=("contact",))   
+            st.error('This account has not been onboarded. Please consult Provider to get enabled to use this app.', icon="🚨")
 
         
     

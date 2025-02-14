@@ -956,13 +956,13 @@ try {
                 snowflake.execute({sqlText:`UPDATE APP.TRUST_CENTER_CHECK SET value = SYSDATE() WHERE LOWER(key) = 'last_check_timestamp';`});
 
                 //log trust center check completed
-                snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'trust_center_check', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'COMPLETE', '"Trust Center check (last 7 days) complete. Risk Count: ${tc_risk_count}. Affected Scanners: ${tc_affected_scanners}."');`});
+                snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'trust_center_check', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'COMPLETE', '"Trust Center check (last ${tc_lookback}) complete. Risk Count: ${tc_risk_count}. Affected Scanners: ${tc_affected_scanners}."');`});
 
                 //log trust center risks exist if tc_risk_count > 0
                 if (tc_risk_count > 0){
-                  snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'request', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'ERROR', '"Trust Center has found ${tc_risk_count} risk(s) over the last 7 days, affecting the following Trust Center scanners: ${tc_affected_scanners}. Check the Trust Center for more details. Request failed."');`});
+                  snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'request', '[{"request_id":"${request_id}"}, {"proc_name":"${proc_name}"}, {"proc_parameters":"${proc_parameters_esc}"}]', SYSDATE(), 'ERROR', '"Trust Center has found ${tc_risk_count} risk(s) over the last ${tc_lookback}, affecting the following Trust Center scanners: ${tc_affected_scanners}. Check the Trust Center for more details. Request failed."');`});
 
-                  return `ERROR:  Trust Center has found ${tc_risk_count} risk(s) over the last 7 days, affecting the following Trust Center scanners: ${tc_affected_scanners}. Check the Trust Center for more details. Request failed.`;
+                  return `ERROR:  Trust Center has found ${tc_risk_count} risk(s) over the last ${tc_lookback} days, affecting the following Trust Center scanners: ${tc_affected_scanners}. Check the Trust Center for more details. Request failed.`;
                 }
               } else {
                 //log trust center access has not been granted
