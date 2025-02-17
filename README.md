@@ -27,7 +27,7 @@ In addition, the Provider can control which function(s)/stored procedure(s) the 
 This repo includes three notebooks, located in the `installer/` directory, that streamline deploying the current version of the ACF. Each notebook should be imported in the appicable Snowflake account and executed, using the role specified. Refer to each notebook for more details. 
 
 **NOTE:** each notebook is standalone and always references the latest ACF version. This allows the notebooks to be distributed separately from the full ACF repo.
-- `01_event_account_setup`: this notebook configures a Snowflake account as an event account that collects events from native apps installed in that account's Snowflake clound/region. A listing is created to share events from this region to the ACF account. If the native app will be available in multiple regions, this notebook should be executed in a Snowflake account in each applicable region.
+- `01_event_account_setup`: this notebook configures a Snowflake account as an event account that collects events from native apps installed in that account's Snowflake cloud/region. A listing is created to share events from this region to the ACF account. If the native app will be available in multiple regions, this notebook should be executed in a Snowflake account in each applicable region.
 - `02_acf_installer`: this notebook installs the ACF in the designated account, mounts databases for each event account listing, and creates the dev environment used to create/test the application logic
 - `03_create_demo_native_app` (optional): this notebook deploys sample application logic, along with a Streamlit UI that can be used to build and depoye a native app that uses ACF to control and monitor usage.
 
