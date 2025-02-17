@@ -29,7 +29,7 @@ This repo includes three notebooks, located in the `installer/` directory, that 
 **NOTE:** each notebook is standalone and always references the latest ACF version. This allows the notebooks to be distributed separately from the full ACF repo.
 - `01_event_account_setup`: this notebook configures a Snowflake account as an event account that collects events from native apps installed in that account's Snowflake cloud/region. A listing is created to share events from this region to the ACF account. If the native app will be available in multiple regions, this notebook should be executed in a Snowflake account in each applicable region.
 - `02_acf_installer`: this notebook installs the ACF in the designated account, mounts databases for each event account listing, and creates the dev environment used to create/test the application logic
-- `03_create_demo_native_app` (optional): this notebook deploys sample application logic, along with a Streamlit UI that can be used to build and depoye a native app that uses ACF to control and monitor usage.
+- `03_create_demo_native_app` (optional): this notebook deploys sample application logic, along with a Streamlit UI that can be used to build and deploy a native app that uses ACF to control and monitor usage.
 
 ## Custom Development Deployment
 In the event developers want to modify/extend ACF functionality, this repo can be forked to deploy/test their updates, using SnowSQL. For more information, refer to the **Application Control Framework - Development Guide** document.
