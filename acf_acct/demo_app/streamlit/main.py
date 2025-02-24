@@ -133,7 +133,7 @@ def request(app_name, app_mode, ref_name, input_ref):
                 else :
                     st.success(f"Enrichment complete 🎉. Results are in table: {app_name}.RESULTS_APP.{results_table}")
                     time.sleep(3)
-                    st.experimental_rerun()
+                    st.rerun()
 
 
 def save_form(app_name):    
@@ -221,7 +221,7 @@ class home(BasePage):
                 app_key_metadata= pd.DataFrame(session.sql(f"SELECT LOWER(value) FROM {app_name}.METADATA.METADATA_V WHERE LOWER(key) = 'app_key' AND LOWER(account_locator) = LOWER('{account_locator}') AND LOWER(consumer_name) = LOWER('{consumer_name}')").collect()).iloc[0,0]   
                 app_key_local= pd.DataFrame(session.sql(f"SELECT LOWER(app_key) FROM {app_name}.APP.APP_KEY").collect()).iloc[0,0] 
             except :
-                st.experimental_rerun()
+                st.rerun()
 
             enable_check  = pd.DataFrame(session.sql(f"SELECT value FROM {app_name}.UTIL_APP.METADATA_C_V WHERE LOWER(key) = 'enabled'").collect()).iloc[0,0]
             trust_center_enforcement = pd.DataFrame(session.sql(f"SELECT value FROM {app_name}.METADATA.METADATA_V WHERE LOWER(key) = 'trust_center_enforcement'").collect()).iloc[0,0]
