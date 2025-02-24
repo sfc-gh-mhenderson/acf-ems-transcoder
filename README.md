@@ -32,4 +32,4 @@ This repo includes three notebooks, located in the `installer/` directory, that 
 - `03_create_demo_native_app` (optional): this notebook deploys sample application logic, along with a Streamlit UI that can be used to build and deploy a native app that uses ACF to control and monitor usage.
 
 ## Custom Development Deployment
-In the event developers want to modify/extend ACF functionality, this repo can be forked to deploy/test their updates, using SnowSQL. For more information, refer to the **Application Control Framework - Development Guide** document.
+In the event developers want to modify/extend ACF functionality, this repo can be forked to deploy/test their updates, using SnowSQL. For more information, refer to the **Application Control Framework - Deployment Guide** document.
