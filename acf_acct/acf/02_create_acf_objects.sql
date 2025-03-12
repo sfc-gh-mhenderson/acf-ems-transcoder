@@ -245,7 +245,7 @@ CREATE OR REPLACE PROCEDURE EVENTS.CREATE_EVENTS_DB_FROM_LISTING()
         let listing_id = rset.getColumnValue(1);
         let listing_title = rset.getColumnValue(2);
         let is_ready_for_import = rset.getColumnValue(3);
-        let is_imported = rset.getColumnValue(3);
+        let is_imported = rset.getColumnValue(4);
 
         if (is_ready_for_import == 'true' && is_imported == 'false') {
             //set events db name
