@@ -238,34 +238,33 @@ CREATE OR REPLACE PROCEDURE EVENTS.CREATE_EVENTS_DB_FROM_LISTING()
       let events_db_arr = [];
 
       //show listings shared with the ACF account
-      snowflake.execute({sqlText: `SHOW TERSE AVAILABLE LISTINGS IS_SHARED_WITH_ME=TRUE;`});
-      let rset = snowflake.execute({sqlText: `SELECT "global_name", "title" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID())) WHERE CONTAINS("title",'&{APP_CODE}_EVENTS_FROM_');`});
+      snowflake.execute({sqlText: `SHOW AVAILABLE LISTINGS IS_SHARED_WITH_ME=TRUE;`});
+      let rset = snowflake.execute({sqlText: `SELECT "global_name", "title", "is_ready_for_import", "is_imported" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID())) WHERE CONTAINS("title",'&{APP_CODE}_EVENTS_FROM_');`});
 
       while(rset.next()){
         let listing_id = rset.getColumnValue(1);
         let listing_title = rset.getColumnValue(2);
+        let is_ready_for_import = rset.getColumnValue(3);
+        let is_imported = rset.getColumnValue(3);
 
-        //set events db name
-        let events_db = `${listing_title}_SHARE`;
-
-        //create region events db from listing
-        snowflake.execute({sqlText: `CREATE DATABASE IF NOT EXISTS ${events_db} FROM LISTING '${listing_id}';`});
-
-        //append events_db to array
-        events_db_arr.push(events_db);     
+        if (is_ready_for_import == 'true' && is_imported == 'false') {
+            //set events db name
+            let events_db = `${listing_title}_SHARE`;
+    
+            //create region events db from listing
+            snowflake.execute({sqlText: `CREATE DATABASE IF NOT EXISTS ${events_db} FROM LISTING '${listing_id}';`});
+    
+            //append events_db to array
+            events_db_arr.push(events_db); 
+        }  
       }
 
       return events_db_arr;
 
     } catch (err) {
 
-      var result = `
-      Failed: Code: `+err.code + `
-      State: `+err.state+`
-      Message: `+err.message+`
-      Stack Trace:`+ err.stack;
-
-      return `Error: ${result}`;
+      var result = `Failed: Code: `+err.code + ` State: `+err.state+` Message: `+err.message.replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ")+` Stack Trace:`+ err.stack.toString().replace(/\'|\"/gm, "").replace(/\r|\n|\r\n|\n\r/gm, " ");
+      return [`Error: ${result}`];
     }
 
 
