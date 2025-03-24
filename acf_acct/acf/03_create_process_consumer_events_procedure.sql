@@ -178,7 +178,84 @@ $$
     snowflake.execute({sqlText:`INSERT INTO P_&{APP_CODE}_ACF_DB.EVENTS.CONTROL_EVENTS(msg) SELECT PARSE_JSON('{"account":"${consumer_account}", "consumer_name":"${consumer_name}", "event_type":"distinct_record_count_check", "timestamp":"'||SYSDATE()::string||'", "message":"New distinct record count total: ${total_records_processed}"}');`});
   }
 
-  //TODO:  add match count logic, if applicable
+  function update_partner_metadata(consumer_account, consumer_name, partner_name, total_records_transcoded, end_timestamp) {
+    //get partner metadata
+    snowflake.execute({sqlText: `SELECT p.value::VARCHAR partner FROM 
+                                  P_&{APP_CODE}_ACF_DB.METADATA.METADATA m, 
+                                  LATERAL FLATTEN(input=>PARSE_JSON(m.value):allowed_partners) p
+                                  WHERE LOWER(account_locator) = LOWER('${consumer_account}')
+                                  AND LOWER(consumer_name) = LOWER('${consumer_name}') 
+                                  AND LOWER(m.key) = 'allowed_partners' 
+                                  AND LOWER(p.value:partner_name) = LOWER('${partner_name}');`});
+
+    rset.next();
+    let partner_metadata = rset.getColumnValue(1);
+    let partner_metadata_obj = JSON.parse(partner_metadata);
+
+    //get current partner metadata
+    let partner_total_requests = partner_metadata_obj.total_requests + 1;
+    let partner_total_records_transcoded = partner_metadata_obj.total_records_transcoded + total_records_transcoded;
+    let partner_access_expiration_timestamp = partner_metadata_obj.access_expiration_timestamp;
+    let partner_access_expiration_flag = partner_metadata_obj.access_expired;
+
+    //set expiration flag to true if last_request_timestamp >= access_expiration_timestamp
+    if (last_request_timestamp >= partner_access_expiration_timestamp){
+      partner_access_expiration_flag = true;
+    }
+
+    //update partner metadata
+    snowflake.execute({sqlText: `WITH cte_partner_update AS
+                                  (
+                                      SELECT OBJECT_INSERT(
+                                                OBJECT_INSERT(
+                                                  OBJECT_INSERT(
+                                                    OBJECT_INSERT(p.value, 'total_requests', ${partner_total_requests}, true)
+                                                    , 'total_records_transcoded'
+                                                    , ${partner_total_records_transcoded}
+                                                    , true)
+                                                , 'last_request_timestamp'
+                                                , '${end_timestamp}'
+                                                , true)
+                                              , 'access_expired'
+                                              , ${partner_access_expiration_flag}
+                                              , true)  partner 
+                                      FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA m, 
+                                      LATERAL FLATTEN(input=>PARSE_JSON(m.value):allowed_partners) p
+                                      WHERE LOWER(account_locator) = LOWER('${consumer_account}')
+                                      AND LOWER(consumer_name) = LOWER('${consumer_name}')
+                                      AND LOWER(m.key) = 'allowed_partners'  
+                                      AND LOWER(p.value:partner_name) = LOWER('${partner_name}')
+                                  ),
+
+                                  cte_remaining_partners AS
+                                  (
+                                      SELECT p.value partner FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA m, 
+                                      LATERAL FLATTEN(input=>PARSE_JSON(m.value):allowed_partners) p
+                                      WHERE LOWER(account_locator) = LOWER('${consumer_account}')
+                                      AND LOWER(consumer_name) = LOWER('${consumer_name}')
+                                      AND LOWER(m.key) = 'allowed_partners' 
+                                      AND LOWER(p.value:partner_name) != LOWER('${partner_name}')
+                                  ),
+
+                                  cte_union AS
+                                  (
+                                      SELECT * FROM cte_partner_update UNION
+                                      SELECT * FROM cte_remaining_partners
+                                  )
+
+                                  SELECT OBJECT_CONSTRUCT('allowed_partners', ARRAY_UNION_AGG(ARRAY_CONSTRUCT(cte_union.partner)))::VARCHAR updated_partner_metadata FROM cte_union;`});
+
+    rset2.next();
+    let updated_partner_metadata = rset2.getColumnValue(1);
+
+    snowflake.execute({sqlText: `UPDATE P_&{APP_CODE}_ACF_DB.METADATA.METADATA 
+                                        SET value = \$\$`+updated_partner_metadata+`\$\$
+                                        WHERE LOWER(account_locator) = LOWER('${consumer_account}')
+                                        AND LOWER(consumer_name) = LOWER('${consumer_name}') 
+                                        AND LOWER(key) = 'allowed_partners';`});
+                                        
+    snowflake.execute({sqlText:`INSERT INTO P_&{APP_CODE}_ACF_DB.EVENTS.CONTROL_EVENTS(msg) SELECT PARSE_JSON('{"account":"${consumer_account}", "consumer_name":"${consumer_name}", "event_type":"partner_metadata_check", "timestamp":"'||SYSDATE()::string||'", "message":"Partner: ${partner_name}, metadata updated"}');`});
+  }
 
   try {  
     var consumer_account = "";
@@ -245,10 +322,14 @@ $$
           }
         }
       } else {
+        var rset3 = snowflake.execute({sqlText: `SELECT default_value FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA_DICTIONARY WHERE LOWER(control_name) = 'allowed_procs';`});
+        rset3.next();
+        let allowed_procs = rset3.getColumnValue(1);
+
         //onboard consumer if FREE
         if(app_mode.toLocaleLowerCase() == 'free') {
           snowflake.execute({sqlText:`CALL P_&{APP_CODE}_ACF_DB.CONSUMER_MGMT.ONBOARD_CONSUMER('${consumer_account}', '${consumer_name}', OBJECT_CONSTRUCT('app_mode', 'free'
-                                                                                                                                    ,'allowed_procs', 'enrich'
+                                                                                                                                    ,'allowed_procs', '${allowed_procs}'
                                                                                                                                     ,'limit','5'
                                                                                                                                     ,'limit_type','requests'
                                                                                                                                     ,'limit_interval', 'N/A'
@@ -256,14 +337,14 @@ $$
 
 
           //get install count
-          var rset3 = snowflake.execute({sqlText: `SELECT MAX(value) FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA 
+          var rset4 = snowflake.execute({sqlText: `SELECT MAX(value) FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA 
                                                   WHERE LOWER(account_locator) = LOWER('${consumer_account}')
                                                   AND LOWER(consumer_name) = LOWER('${consumer_name}')  
                                                   AND LOWER(key) = 'install_count';`});
-          rset3.next();
+          rset4.next();
 
           //update install metadata
-          let install_count = parseInt(rset3.getColumnValue(1));
+          let install_count = parseInt(rset4.getColumnValue(1));
           update_install_metadata(consumer_account, consumer_name, app_key, app_mode, install_count, install_tmstmp);
         }
         
@@ -272,21 +353,21 @@ $$
         //onboard consumer if PAID
         if(app_mode.toLocaleLowerCase() == 'paid') {
           snowflake.execute({sqlText:`CALL P_&{APP_CODE}_ACF_DB.CONSUMER_MGMT.ONBOARD_CONSUMER('${consumer_account}', '${consumer_name}', OBJECT_CONSTRUCT('app_mode', 'paid'
-                                                                                                                                    ,'allowed_procs', 'enrich'
+                                                                                                                                    ,'allowed_procs', '${allowed_procs}'
                                                                                                                                     ,'limit','100000'
                                                                                                                                     ,'limit_type','records'
                                                                                                                                     ,'limit_interval', '30 day'
                                                                                                                                     ,'limit_enforced','Y')::varchar)`});
 
           //get install count
-          var rset3 = snowflake.execute({sqlText: `SELECT MAX(value) FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA 
+          var rset4 = snowflake.execute({sqlText: `SELECT MAX(value) FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA 
                                                   WHERE LOWER(account_locator) = LOWER('${consumer_account}')
                                                   AND LOWER(consumer_name) = LOWER('${consumer_name}')  
                                                   AND LOWER(key) = 'install_count';`});
-          rset3.next();
+          rset4.next();
 
           //update install metadata
-          let install_count = parseInt(rset3.getColumnValue(1));
+          let install_count = parseInt(rset4.getColumnValue(1));
           update_install_metadata(consumer_account, consumer_name, app_key, app_mode, install_count, install_tmstmp);
         }
       }
@@ -386,7 +467,32 @@ $$
             update_record_count_metadata(consumer_account, consumer_name, input_record_count, results_record_count, app_key_metadata, app_mode);
           }
         }
-        //TODO:  add match count logic, if applicable
+        
+        if(metric_type.toLocaleLowerCase().includes("transcode_summary")){
+          if (status.toLocaleLowerCase() == 'complete') {
+            //get stored app key
+            var rset4 = snowflake.execute({sqlText: `SELECT value FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA 
+                                                    WHERE LOWER(account_locator) = LOWER('${consumer_account}')
+                                                    AND LOWER(consumer_name) = LOWER('${consumer_name}') 
+                                                    AND LOWER(key) = 'app_key';`});
+            rset4.next();
+            let app_key_metadata = rset4.getColumnValue(1);
+
+            //get partner array
+            partners = msg_obj.message.metrics.partners;
+
+            //get end_timestamp
+            end_timestamp = msg_obj.message.metrics.end_timestamp;
+
+            for(i = 0; i < partners.length; i++){
+              let partner_name = partners[i].partner_name;
+              let total_records_transcoded = partners[i].total_records_transcoded;
+
+              //update partner metadata
+              update_partner_metadata(consumer_account, consumer_name, partner_name, total_records_transcoded, end_timestamp);
+            }
+          }
+        }
       }
     }
     

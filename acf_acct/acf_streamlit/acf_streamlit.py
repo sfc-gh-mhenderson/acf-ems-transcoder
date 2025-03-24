@@ -65,6 +65,31 @@ def render_image_true_size(image: str):
     image_string = f'data:image/{mime_type};base64,{content_b64encoded}'
     st.image(image_string)
 
+def onboard_consumers_partners_selectbox_callback(df, c_idx, p_idx):
+    if st.session_state[f"onboard_consumer_{c_idx}_allowed_partners_partner_{p_idx}_name"] != "(None selected)":
+        st.session_state[f"onboard_consumer_{c_idx}_allowed_partners_partner_{p_idx}_client_code"] = df.query(f'PARTNER_NAME == "{st.session_state[f"onboard_consumer_{c_idx}_allowed_partners_partner_{p_idx}_name"]}"').iloc[0,0]
+    else:
+        st.session_state[f"onboard_consumer_{c_idx}_allowed_partners_partner_{p_idx}_client_code"] = "N/A"
+        st.session_state[f"onboard_consumer_{c_idx}_allowed_partners_partner_{p_idx}_access_window"] = ""
+
+def manage_consumers_reset_access_selectbox_callback(val, disable_access_window_flag):
+    if st.session_state[val].lower() == "y":
+        st.session_state[disable_access_window_flag] = False
+    else:
+        st.session_state[disable_access_window_flag] = True
+
+def manage_consumers_partners_selectbox_callback(df, p_idx):
+    if st.session_state[f"manage_consumer_add_allowed_partners_partner_{p_idx}_name"] != "(None selected)":
+        st.session_state[f"manage_consumer_add_allowed_partners_partner_{p_idx}_client_code"] = df.query(f'PARTNER_NAME == "{st.session_state[f"manage_consumer_add_allowed_partners_partner_{p_idx}_name"]}"').iloc[0,0]
+    else:
+        st.session_state[f"manage_consumer_add_allowed_partners_partner_{p_idx}_client_code"] = "N/A"
+        st.session_state[f"manage_consumer_add_allowed_partners_partner_{p_idx}_access_window"] = ""
+
+def manage_consumer_controls_selectbox(val):
+    if st.session_state[val].lower() != "choose...":
+        if st.session_state[val] not in st.session_state["manage_consumers"]["master_consumer_list"]:
+            st.session_state["manage_consumers"]["master_consumer_list"] = [st.session_state[val]]
+
 #function to reset acm session vars
 def reset_acm_session_vars():
     #controls session vars
@@ -1718,7 +1743,7 @@ class onboard_consumer_page(BasePage):
         #st.write("#")
         #st.write("#")
 
-        col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,1,1.065], gap="small")
+        col1, col2, col3, col4, col5, col6 = st.columns([1,1,1,1,0.75,1.075], gap="small")
 
         with col6:
             new_consumer = st.button("\+ Consumer", key="onboard_add_consumer", type="primary")
@@ -1797,7 +1822,7 @@ class onboard_consumer_page(BasePage):
                         if st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"] and d in st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"]:
                             del st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"][d]
 
-                col1, col2, col3, col4 = st.columns([1,2.5,1.30,1.05], gap="small")
+                col1, col2, col3, col4 = st.columns([1,2.5,1.15,1.15], gap="small")
 
                 with col4:
                     diagnostics = st.checkbox("Diagnostic Mode: ", key=f"onboard_consumer{i+1}_diagnostics_mode")
@@ -1808,26 +1833,133 @@ class onboard_consumer_page(BasePage):
                 for sc in st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"]:  
                     if f"onboard_consumer_{i+1}_control_{sc}_override_value" not in st.session_state:
                         st.session_state[f"onboard_consumer_{i+1}_control_{sc}_override_value"] = ""
+
+                    if st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"][sc] == "":
+                        prefix = "<No Default Value>"  
+                    else:
+                        prefix = "Default: "
+
+                    if sc.lower() == "allowed_partners":
+                        if f"onboard_consumer_{i+1}_{sc}_allowed_partners_obj" not in st.session_state:
+                            st.session_state[f"onboard_consumer_{i+1}_{sc}_allowed_partners_obj"] = {}
+
+                        if f"onboard_consumer_{i+1}_{sc}_list" not in st.session_state:
+                            st.session_state[f"onboard_consumer_{i+1}_{sc}_list"] = []
+                        
+                        if f"onboard_consumer_{i+1}_{sc}_counter" not in st.session_state:
+                            st.session_state[f"onboard_consumer_{i+1}_{sc}_counter"] = 0
+        
+                        remove_partner_flag = False
+
+                        #get partner info
+                        df_partners = pd.DataFrame(session.sql(f"SELECT client_code, partner_name FROM P_{st.session_state.app_code}_ACF_DB.METADATA.PARTNERS ORDER BY client_code ASC").collect())
+                        master_partner_list = list(df_partners["PARTNER_NAME"])
                     
-                    col1, col2 = st.columns(2, gap="small")
-                
-                    with col1:
-                        st.text_input("Control:", sc, key=f"consumer_{i+1}_{sc}", disabled=True)
-                    with col2:
-                        prefix = ""
-                        if st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"][sc] == "":
-                            prefix = "<No Default Value>"  
-                        else:
-                            prefix = "Default: "
+                        col1, col2, col3 = st.columns([5,1.15,1.15], gap="small")
 
-                        st.session_state[f"onboard_consumer_{i+1}_{sc}_override_value"] = st.text_input("New Value:", key=f"consumer_1_{i+1}_{sc}_override", placeholder=prefix+st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"][sc])
+                        with col1:    
+                            st.text_input("Control:", sc, key=f"consumer_{i+1}_{sc}", disabled=True)
+                        with col2:
+                            st.write("")
+                            st.write("")
+                            add_partner = st.button("\+ Partner", key=f"consumer_{i+1}_{sc}_add_partner", type="primary", disabled=False)
+                        with col3:
+                            st.write("")
+                            st.write("")
+                            
+                            if st.session_state[f"onboard_consumer_{i+1}_{sc}_counter"] == 0:
+                                remove_partner_flag = True
+                                
+                            remove_partner = st.button("\- Partner", key=f"consumer_{i+1}_{sc}_remove_partner", type="primary", disabled=remove_partner_flag)
 
-                        st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"].update({sc:st.session_state[f"onboard_consumer_{i+1}_{sc}_override_value"]})
+                        
+                            if add_partner:
+                                st.session_state[f"onboard_consumer_{i+1}_{sc}_counter"] += 1
+                                st.rerun()
 
+                            if remove_partner:
+                                st.session_state[f"onboard_consumer_{i+1}_{sc}_counter"] -= 1
+                                
+                                if st.session_state[f"onboard_consumer_{i+1}_{sc}_list"]:
+                                    st.session_state[f"onboard_consumer_{i+1}_{sc}_list"].pop()
+                                    
+                                st.rerun()
+
+                        with st.container(border=True):
+                            st.write("Partners:")
+                            for j in range(st.session_state[f"onboard_consumer_{i+1}_{sc}_counter"]):
+                                
+                                if f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj" not in st.session_state:
+                                    st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"] = {}
+                        
+                                with st.container(border=True, key=f"onboard_consumer_{i+1}_{sc}_partner_{j}_container"):
+                                    st.markdown(f"Partner {j+1}")
+                                    pcol1, pcol2, pcol3 = st.columns([3,1,1.25], gap="small")
+    
+                                    with pcol1:
+                                        partner_name = st.selectbox("Partner Name"
+                                                                    , ["(None selected)"] + list(df_partners["PARTNER_NAME"])
+                                                                    , key=f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_name"
+                                                                    , on_change=onboard_consumers_partners_selectbox_callback
+                                                                    , args=(df_partners , i+1 , j+1)
+                                                                   )
+                                    with pcol2:
+                                        partner_client_code = st.text_input("Client Code:", placeholder="N/A", key=f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_client_code", disabled=True)
+                                    with pcol3:
+                                        access_window_flag = True
+                                        
+                                        if partner_name != "(None selected)":
+                                            access_window_flag = False
+                                            
+                                        access_window = st.text_input("Access Window:", placeholder="0 days", key=f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_access_window", help="The duration this consumer has access to transcode to this partner's PIDs/LUIDs i.e. '90 days'. This field accepts any valid value that can be used with the Snowflake INTERVAL constant. The value in this field is added to the CURRENT_TIMESTAMP() to set the expiration date, when the consumer is onboarded.", disabled=access_window_flag)
+
+                                    if (partner_name !=  "(None selected)") and partner_client_code != "N/A" and (access_window and not access_window.isspace()) :
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"partner_name":partner_name})
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"partner_client_code":int(partner_client_code)})
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"access_window":access_window})
+
+                                        #set access window expriation date
+                                        access_expiration_timestamp = pd.DataFrame(session.sql(f"SELECT CURRENT_TIMESTAMP()::timestamp_ntz(6) + INTERVAL '{access_window}'").collect()).iloc[0,0]
+
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"access_expiration_timestamp":f"{access_expiration_timestamp}"})
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"access_expired":False})
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"total_requests":0})
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"total_records_transcoded":0})
+                                        st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"].update({"last_request_timestamp":"9998-01-01"})
+
+                                        #only add to the partner list if the partner isn't already there
+                                        if st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"] not in st.session_state[f"onboard_consumer_{i+1}_{sc}_list"]:
+                                            st.session_state[f"onboard_consumer_{i+1}_{sc}_list"].append(st.session_state[f"onboard_consumer_{i+1}_{sc}_partner_{j+1}_obj"])
+
+                        #update the allowed_partners object
+                        st.session_state[f"onboard_consumer_{i+1}_{sc}_allowed_partners_obj"].update({"allowed_partners":st.session_state[f"onboard_consumer_{i+1}_{sc}_list"]})
+
+                        #convert allowed_partners object to a compacted json string and add to the param overrides object
+                        allowed_partners_str = json.dumps(st.session_state[f"onboard_consumer_{i+1}_{sc}_allowed_partners_obj"], separators=(',', ':')).replace('"', '\\"')
+                        st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"].update({sc:allowed_partners_str})
+    
+                        st.write("")
+                                                            
+                    else:
+                        col1, col2 = st.columns(2, gap="small")
+                    
+                        with col1:
+                            st.text_input("Control:", sc, key=f"consumer_{i+1}_{sc}", disabled=True)
+                        with col2:
+                            st.session_state[f"onboard_consumer_{i+1}_{sc}_override_value"] = st.text_input("New Value:", key=f"consumer_1_{i+1}_{sc}_override", placeholder=prefix+st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"][sc])
+    
+                            st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"].update({sc:st.session_state[f"onboard_consumer_{i+1}_{sc}_override_value"]})
 
                 if st.session_state[f"onboard_consumer_{i+1}_account"] != "" and st.session_state[f"onboard_consumer_{i+1}_name"] != "":
-                    onboard_consumer_enabled = True
+                    if "allowed_partners" in st.session_state["onboard_consumer_list"][f"onboard_consumer_{i+1}_params"]["control_overrides"]:
+                        if not st.session_state[f"onboard_consumer_{i+1}_allowed_partners_list"]:
+                            onboard_consumer_enabled = False
+                        else:
+                            onboard_consumer_enabled = True
+                    else:
+                        onboard_consumer_enabled = True
 
+    
                 if diagnostics:
                     st.write(st.session_state["onboard_consumer_list"])
                         
@@ -1910,7 +2042,12 @@ class manage_consumer_controls_page(BasePage):
             st.caption("There are no consumers.")
         
         if not consumers_df.empty:
-            st.session_state.selected_managed_consumer = st.selectbox("Select Consumer:", consumers_df["CONSUMER_NAME"], key="manage_consumer_controls_select_consumer")                
+            st.session_state.selected_managed_consumer = st.selectbox("Select Consumer:"
+                                                                      , ["Choose..."]+list(consumers_df["CONSUMER_NAME"])
+                                                                      , key="manage_consumer_controls_select_consumer"
+                                                                      , on_change=manage_consumer_controls_selectbox
+                                                                      ,args=("manage_consumer_controls_select_consumer",)
+                                                                     )                
             controls_df = pd.DataFrame(session.sql(f"SELECT key, value FROM METADATA.METADATA WHERE UPPER(consumer_name) = UPPER('{st.session_state.selected_managed_consumer}')").collect())
 
         control_list = []
@@ -1948,47 +2085,240 @@ class manage_consumer_controls_page(BasePage):
         
         st.write("#")
         st.subheader("Selected Controls:")
+        st.write("")
 
         for sc in st.session_state["manage_consumers"]["consumer_controls"]:  
             if f"manage_consumer_control_{sc}_update_value" not in st.session_state:
                 st.session_state[f"manage_consumer_control_{sc}_update_value"] = ""
+
+            if sc.lower() == "allowed_partners":
+                ms_current_allowed_partners = []
+                reset_access = "N"
+                sb_allowed_partners_action = ""
+                
+                #get consumer's allowed_partner info
+                current_allowed_partners_obj = json.loads(st.session_state["manage_consumers"]["consumer_controls"][sc])
+                current_allowed_partners_list = [p["partner_name"] for p in current_allowed_partners_obj["allowed_partners"] if "partner_name" in p]
+
+    
+                col1, col2 = st.columns([1,3], gap="small")
+                
+                with col1:
+                    st.text_input("Control:", sc, key=f"manage_consumer_control_{sc}", disabled=True)
+                with col2:
+                    sb_allowed_partners_action = st.selectbox("Select Action:", options=["Choose...","Update/Remove Partner(s)","Add Partner(s)"], key=f"mc_allowed_partners_select_action")
+
+                
+                with st.container(border=True):
+                    if sb_allowed_partners_action == "Update/Remove Partner(s)":
+                        ms_current_allowed_partners = st.multiselect("Select Current Partner(s) to Update:", options=current_allowed_partners_list, key=f"mc_allowed_partners_update")
+                        st.write("")
+                        
+                        for p in ms_current_allowed_partners:
+                            if f"manage_consumer_control_allowed_partners_{p}_reset_access" not in st.session_state:
+                                st.session_state[f"manage_consumer_control_allowed_partners_{p}_reset_access"] = True
+                        
+                            p_obj = [cp for cp in current_allowed_partners_obj["allowed_partners"] if cp["partner_name"] == p][0]
+                            p_obj_updated = p_obj.copy()
+                            
+                            with st.container(border=True, key=f"manage_consumer_allowed_partners_{p}_container"):
+                                tcol1, tcol2, tcol3, tcol4, tcol5 = st.columns([2,1,1,1.04,1], gap="small")
+    
+                                with tcol1:
+                                    st.write(f"Partner: **{p}**")
+                                with tcol5:
+                                    #remove_partner = st.button("Remove", key=f"manage_consumer_allowed_partners_{p}_remove")
+                                    remove_partner = st.checkbox("Remove", key=f"manage_consumer_allowed_partners_{p}_remove")
+    
+                                    if remove_partner:
+                                        if p_obj in current_allowed_partners_obj["allowed_partners"]:
+                                            current_allowed_partners_obj["allowed_partners"].remove(p_obj)
+                                
+                                pcol1, pcol2, pcol3, pcol4 = st.columns([1.85,0.65,1,0.75], gap="small")
+    
+                                with pcol1:
+                                    partner_name = st.text_input("Partner Name", p_obj["partner_name"] , key=f"manage_consumer_allowed_partners_{p}_name", disabled=True)
+                                with pcol2:
+                                    partner_client_code = st.text_input("Client Code:", p_obj["partner_client_code"], key=f"manage_consumer_allowed_partners_{p}_client_code", disabled=True)
+                                with pcol3:
+                                    access_window = st.text_input("Access Window:", p_obj["access_window"], key=f"manage_consumer_allowed_partners_{p}_access_window", help="The duration this consumer has access to transcode to this partner's PIDs/LUIDs i.e. '90 days'. This value is added to the timestamp when the consumer is onboarded to set the expiration date.", disabled=st.session_state[f"manage_consumer_control_allowed_partners_{p}_reset_access"])
+                                with pcol4:
+                                    reset_access = st.selectbox("Reset?"
+                                                                , ["N","Y"]
+                                                                , index=0
+                                                                , key=f"cb_mc_allowed_partners_{p}_reset_access"
+                                                                , on_change=manage_consumers_reset_access_selectbox_callback
+                                                                , args=(f"cb_mc_allowed_partners_{p}_reset_access", f"manage_consumer_control_allowed_partners_{p}_reset_access")
+                                                                , help="Selecting 'Y' resets the consumer's access window, based on the value in the Access Window text field. \n- If the expiration date is in the future, the expiration date will be extended from that date. \n- If the expiration date has expired, the expiration date will be set from the CURRENT_TIMESTAMP()."
+                                                               )
+    
+                                if (access_window and not access_window.isspace()):
+                                    if reset_access.lower() == "y":
+                                        #set updated access window and expiration date
+                                        p_obj_updated.update({"access_window":access_window})
+    
+                                        updated_access_expiration_timestamp = pd.DataFrame(session.sql(f"""SELECT IFF('{p_obj["access_expiration_timestamp"]}' > CURRENT_TIMESTAMP()
+                                                                                                                        , ('{p_obj["access_expiration_timestamp"]}'::timestamp_ntz(6) + INTERVAL '{access_window}')
+                                                                                                                        , (CURRENT_TIMESTAMP()::timestamp_ntz(6) + INTERVAL '{access_window}'))""").collect()).iloc[0,0]
+                                        
+                                        p_obj_updated.update({"access_expiration_timestamp":f"{updated_access_expiration_timestamp}"})
+                                        p_obj_updated.update({"access_expired":False})
+    
+                                st.markdown(f"""**Original Expiration:** `{p_obj["access_expiration_timestamp"]}`""")
+                                st.markdown(f"""**Updated Expiration:** `{p_obj_updated["access_expiration_timestamp"]}`""")
+                            #st.write(p_obj_updated)
+    
+                            
+                            if p_obj in current_allowed_partners_obj["allowed_partners"]:
+                                idx = current_allowed_partners_obj["allowed_partners"].index(p_obj)
+                                current_allowed_partners_obj["allowed_partners"][idx] = p_obj_updated
+
+                
+
+                        #update the allowed_partners object
+                        current_allowed_partners_obj.update({"allowed_partners":current_allowed_partners_obj["allowed_partners"]})
             
-            col1, col2, col3 = st.columns(3, gap="small")
-        
-            with col1:
-                st.text_input("Control:", sc, key=f"manage_consumer_control_{sc}", disabled=True)
-            with col2:
-                prefix = ""
-                if st.session_state["manage_consumers"]["consumer_controls"][sc] == "":
-                    prefix = "<No Current Value>"  
-                else:
-                    prefix = "Current: "
+                        #convert allowed_partners object to a compacted json string and add to the consumer_controls object
+                        current_allowed_partners_str = json.dumps(current_allowed_partners_obj, separators=(',', ':')).replace('"', '\\"')
+                        st.session_state["manage_consumers"]["consumer_controls"].update({sc:current_allowed_partners_str})
+            
+                        #st.write(st.session_state["manage_consumers"]["consumer_controls"])
+            
+                    if sb_allowed_partners_action == "Add Partner(s)":
+                        if f"manage_consumer_add_allowed_partners_allowed_partners_obj" not in st.session_state:
+                            st.session_state[f"manage_consumer_add_allowed_partners_allowed_partners_obj"] = {}
+                        
+                        if f"manage_consumer_add_allowed_partners_list" not in st.session_state:
+                            st.session_state[f"manage_consumer_add_allowed_partners_list"] = []
+                        
+                        if f"manage_consumer_add_allowed_partners_counter" not in st.session_state:
+                            st.session_state[f"manage_consumer_add_allowed_partners_counter"] = 0
+                        
+                        remove_partner_flag = False
+                        
+                        #get partner info
+                        df_partners = pd.DataFrame(session.sql(f"SELECT client_code, partner_name FROM P_{st.session_state.app_code}_ACF_DB.METADATA.PARTNERS ORDER BY client_code ASC").collect())
+                        master_partner_list = list(df_partners["PARTNER_NAME"])
 
-                if sc.lower() == 'custom_attributes':
-                    st.session_state[f"manage_consumer_control_{sc}_update_value"] = st.text_area("New Value:", key=f"consumer_control_{sc}_updates", placeholder=prefix+st.session_state["manage_consumers"]["consumer_controls"][sc])
-                else:
-                    st.session_state[f"manage_consumer_control_{sc}_update_value"] = st.text_input("New Value:", key=f"consumer_control_{sc}_updates", placeholder=prefix+st.session_state["manage_consumers"]["consumer_controls"][sc])
-
-                if st.session_state[f"manage_consumer_control_{sc}_update_value"] == "":
-                    st.session_state[f"manage_consumer_control_{sc}_update_value"] = st.session_state["manage_consumers"]["consumer_controls"][sc]
-
-                st.session_state["manage_consumers"]["consumer_controls"].update({sc:st.session_state[f"manage_consumer_control_{sc}_update_value"]})
-            with col3:
-                st.write("#")
-                clear_value = st.checkbox("Clear Value? ", key=f"manage_consumer_controls_clear_{sc}_value", help="Checking this box removes the current value stored for this control and overrides any new value entered")
-                if clear_value:
-                    st.session_state[f"manage_consumer_control_{sc}_update_value"] = ""
+                        st.write("**Add Partner(s)**")
+                        col1, col2, col3 = st.columns([1.15,1.15,5], gap="small")
+                        
+                        with col1:
+                            st.write("")
+                            st.write("")
+                            add_partner = st.button("\+ Partner", key=f"manage_consumer_allowed_partners_add_partner", type="primary", disabled=False)
+                        with col2:
+                            st.write("")
+                            st.write("")
+                            
+                            if st.session_state[f"manage_consumer_add_allowed_partners_counter"] == 0:
+                                remove_partner_flag = True
+                                
+                            remove_partner = st.button("\- Partner", key=f"manage_consumer_allowed_partners_remove_partner", type="primary", disabled=remove_partner_flag)
+                        
+                        
+                            if add_partner:
+                                st.session_state[f"manage_consumer_add_allowed_partners_counter"] += 1
+                                st.rerun()
+                        
+                            if remove_partner:
+                                st.session_state[f"manage_consumer_add_allowed_partners_counter"] -= 1
+                                
+                                if st.session_state[f"manage_consumer_add_allowed_partners_list"]:
+                                    st.session_state[f"manage_consumer_add_allowed_partners_list"].pop()
+                                    
+                                st.rerun()
+                        
+                        st.write("Partners:")
+                        for i in range(st.session_state[f"manage_consumer_add_allowed_partners_counter"]):
+                            
+                            if f"manage_consumer_add_allowed_partners_partner_{i+1}_obj" not in st.session_state:
+                                st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"] = {}
+                        
+                            with st.container(border=True, key=f"manage_consumer_add_allowed_partners_partner_{i}_container"):
+                                st.markdown(f"Partner {i+1}")
+                                pcol1, pcol2, pcol3 = st.columns([3,1,1.25], gap="small")
+                        
+                                with pcol1:
+                                    partner_name = st.selectbox("Partner Name"
+                                                                , ["(None selected)"] + list(df_partners["PARTNER_NAME"])
+                                                                , key=f"manage_consumer_add_allowed_partners_partner_{i+1}_name"
+                                                                , on_change=manage_consumers_partners_selectbox_callback
+                                                                , args=(df_partners , i+1)
+                                                                )
+                                with pcol2:
+                                    partner_client_code = st.text_input("Client Code:", placeholder="N/A", key=f"manage_consumer_add_allowed_partners_partner_{i+1}_client_code", disabled=True)
+                                with pcol3:
+                                    access_window_flag = True
+                                    
+                                    if partner_name != "(None selected)":
+                                        access_window_flag = False
+                                        
+                                    access_window = st.text_input("Access Window:", placeholder="0 days", key=f"manage_consumer_add_allowed_partners_partner_{i+1}_access_window", help="The duration this consumer has access to transcode to this partner's PIDs/LUIDs i.e. '90 days'. This field accepts any valid value that can be used with the Snowflake INTERVAL constant. The value in this field is added to the CURRENT_TIMESTAMP() to set the expiration date, when the consumer is onboarded.", disabled=access_window_flag)
+                        
+                                if (partner_name !=  "(None selected)") and partner_client_code != "N/A" and (access_window and not access_window.isspace()) :
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"partner_name":partner_name})
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"partner_client_code":int(partner_client_code)})
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"access_window":access_window})
+                        
+                                    #set access window expriation date
+                                    access_expiration_timestamp = pd.DataFrame(session.sql(f"SELECT CURRENT_TIMESTAMP()::timestamp_ntz(6) + INTERVAL '{access_window}'").collect()).iloc[0,0]
+                        
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"access_expiration_timestamp":f"{access_expiration_timestamp}"})
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"access_expired":False})
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"total_requests":0})
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"total_records_transcoded":0})
+                                    st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"].update({"last_request_timestamp":"9998-01-01"})
+                        
+                                    #only add to the partner list if the partner isn't already there
+                                    if st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"] not in st.session_state[f"manage_consumer_add_allowed_partners_list"]:
+                                        st.session_state[f"manage_consumer_add_allowed_partners_list"].append(st.session_state[f"manage_consumer_add_allowed_partners_partner_{i+1}_obj"])
+                        
+                        #update the allowed_partners object
+                        st.session_state[f"manage_consumer_add_allowed_partners_allowed_partners_obj"].update({"allowed_partners":st.session_state[f"manage_consumer_add_allowed_partners_list"]})
+                        
+                        #convert allowed_partners object to a compacted json string and add to the param overrides object
+                        allowed_partners_str = json.dumps(st.session_state[f"manage_consumer_add_allowed_partners_allowed_partners_obj"], separators=(',', ':')).replace('"', '\\"')
+                        st.session_state["manage_consumers"]["consumer_controls"].update({sc:allowed_partners_str})
+            else:
+                col1, col2, col3 = st.columns(3, gap="small")
+            
+                with col1:
+                    st.text_input("Control:", sc, key=f"manage_consumer_control_{sc}", disabled=True)
+                with col2:
+                    prefix = ""
+                    if st.session_state["manage_consumers"]["consumer_controls"][sc] == "":
+                        prefix = "<No Current Value>"  
+                    else:
+                        prefix = "Current: "
+    
+                    if sc.lower() == 'custom_attributes':
+                        st.session_state[f"manage_consumer_control_{sc}_update_value"] = st.text_area("New Value:", key=f"consumer_control_{sc}_updates", placeholder=prefix+st.session_state["manage_consumers"]["consumer_controls"][sc])
+                    else:
+                        st.session_state[f"manage_consumer_control_{sc}_update_value"] = st.text_input("New Value:", key=f"consumer_control_{sc}_updates", placeholder=prefix+st.session_state["manage_consumers"]["consumer_controls"][sc])
+    
+                    if st.session_state[f"manage_consumer_control_{sc}_update_value"] == "":
+                        st.session_state[f"manage_consumer_control_{sc}_update_value"] = st.session_state["manage_consumers"]["consumer_controls"][sc]
+    
                     st.session_state["manage_consumers"]["consumer_controls"].update({sc:st.session_state[f"manage_consumer_control_{sc}_update_value"]})
-        
-        st.write("#")
-
-        col1, col2, col3, col4 = st.columns([1,2.5,1.30,1.05], gap="small")
+                with col3:
+                    st.write("")
+                    st.write("")
+                    clear_value = st.checkbox("Clear Value? ", key=f"manage_consumer_controls_clear_{sc}_value", help="Checking this box removes the current value stored for this control and overrides any new value entered")
+                    if clear_value:
+                        st.session_state[f"manage_consumer_control_{sc}_update_value"] = ""
+                        st.session_state["manage_consumers"]["consumer_controls"].update({sc:st.session_state[f"manage_consumer_control_{sc}_update_value"]})
+            
+            st.write("")
+            st.write("")
+    
+        col1, col2, col3, col4 = st.columns([1,2.5,1.30,1.10], gap="small")
 
         with col4:
             if st.session_state["manage_consumers"]["consumer_controls"]:
                 apply_consumers = st.checkbox("Apply to Other Consumers  ", key="manage_consumer_controls_apply_consumers")
 
-        
+            
         if apply_consumers:
             update_consumer_container = st.container()
             
@@ -2001,15 +2331,17 @@ class manage_consumer_controls_page(BasePage):
             else:
                 update_consumers_list = update_consumer_container.multiselect("Select Consumer(s):", options=consumer_df_filtered["CONSUMER_NAME"],  key="manage_consumer_controls_select_apply_consumers")
 
-            st.session_state["manage_consumers"]["master_consumer_list"] = update_consumers_list
+            st.session_state["manage_consumers"]["master_consumer_list"] = [st.session_state.selected_managed_consumer] + update_consumers_list
 
+        #if st.session_state.selected_managed_consumer not in st.session_state["manage_consumers"]["master_consumer_list"]:
+        #st.session_state["manage_consumers"]["master_consumer_list"].append(st.session_state.selected_managed_consumer)
 
-        if st.session_state.selected_managed_consumer not in st.session_state["manage_consumers"]["master_consumer_list"]:
-            st.session_state["manage_consumers"]["master_consumer_list"].append(st.session_state.selected_managed_consumer)
+        
         
         if st.session_state["manage_consumers"]["consumer_controls"]:
             mangage_consumer_controls_enabled = True
 
+        st.write(st.session_state["manage_consumers"])
         
         st.write("#")
         st.write("#")

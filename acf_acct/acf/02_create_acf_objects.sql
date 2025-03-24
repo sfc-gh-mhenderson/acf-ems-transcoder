@@ -157,13 +157,14 @@ CREATE OR REPLACE TABLE METADATA.METADATA_DICTIONARY(
 --INSERT DEFAULT VALUES
 INSERT INTO METADATA.METADATA_DICTIONARY VALUES
 ('app_mode','detective','=','enterprise',True,True,True,'the version of the app the Consumer has installed.')
-,('allowed_procs','preventive','=','',True,True,True,'the comma-separated list of application stored procedures the Provider allows the Consumer to access (ideal for Providers that offer multiple types of functionality in their application)')
+,('allowed_procs','preventive','=','transcode',True,True,True,'the comma-separated list of application stored procedures the Provider allows the Consumer to access (ideal for Providers that offer multiple types of functionality in their application)')
 ,('allowed_funcs','preventive','=','',True,True,True,'the comma-separated list of application user-defined functions the Provider allows the Consumer to access (ideal for Providers that offer multiple types of functionality in their application)')
 ,('record_cost','detective','=','0.05',True,True,True,'the per-record cost for using this solution.')
 ,('custom_billing','detective','=','N',True,True,True,'Y/N flag that determines whether custom billing is enabled for the Consumer.')
-,('limit','preventive','<=','5000000',True,True,True,'the number of either records or requests the Consumer is allowed')
-,('limit_type','preventive','=','records',True,True,True,'the type of limit (either records or requests)')
-,('limit_interval','preventive','=','30 day',True,True,True,'the interval at which the limit is enforced (i.e. 1 day)')
+,('allowed_partners','preventive','=','',True,True,True,'JSON payload containing the partners the Consumer is allowed to transcode their PIDs/LUIDs to.')
+,('limit','preventive','=','unlimited',True,True,True,'the number of either records or requests the Consumer is allowed')
+,('limit_type','preventive','=','requests',True,True,True,'the type of limit (either records or requests)')
+,('limit_interval','preventive','=','n/a',True,True,True,'the interval at which the limit is enforced (i.e. 1 day)')
 ,('limit_enforced','preventive','=','Y',True,True,True,'flag indicating whether to enforce request limits for the Consumer (ideal for Providers that create test Consumer accounts and do not want the limit to interfere with testing)')
 ,('custom_rules','preventive','=','',True,True,True,'flag indicating which custom rules (if any) should be enforced when making a request)')
 ,('managed','detective','=','N',True,True,True,'flag indicating whether the Consumer is managed via a Provider proxy Snowflake account (for those Consumers that are not on Snowflake)')
@@ -175,15 +176,15 @@ INSERT INTO METADATA.METADATA_DICTIONARY VALUES
 ,('first_install_timestamp','detective','=','9998-01-01',True,False,True,'timestamp of first install by the Consumer')
 ,('last_install_timestamp','detective','=','9998-01-01',True,False,True,'timestamp of the most recent install by the Consumer')
 ,('input_records','detective','=','0',True,False,True,'the number of input records the Consumer has submitted')
-,('input_records_this_interval','detective','=','0',True,False,True,'the number of input records submitted during the allotted period.  This gets reset to 0 at the allotted period')
+,('input_records_this_interval','detective','=','0',True,False,False,'the number of input records submitted during the allotted period.  This gets reset to 0 at the allotted period')
 ,('total_requests','detective','=','0',True,False,True,'the number of requests made by the Consumer')
-,('requests_processed_this_interval','detective','=','0',True,False,True,'the number of Consumer requests processed during the allotted period.  This gets reset to 0 at the allotted period')
+,('requests_processed_this_interval','detective','=','0',True,False,False,'the number of Consumer requests processed during the allotted period.  This gets reset to 0 at the allotted period')
 ,('last_request_timestamp','detective','=','9998-01-01',True,False,True,'timestamp of last request made by the Consumer')
 ,('total_records_processed','detective','=','0',True,False,True,'the number of Consumer records processed since installation')
-,('records_processed_this_interval','detective','=','0',True,False,True,'the number of Consumer records processed during the allotted period.  This gets reset to 0 at the allotted period')
-,('total_matches','detective','=','0',True,False,True,'the total number of matched records (if applicable) the Consumer has received since installing the app')
-,('matches_this_interval','detective','=','0',True,False,True,'the number of matched records (if applicable) the Consumer has received during the allotted period.  This gets reset to 0 at the allotted period')
-,('limit_reset_timestamp','detective','=','9998-01-01',True,False,True,'timestamp of when the counters will be reset');
+,('records_processed_this_interval','detective','=','0',True,False,False,'the number of Consumer records processed during the allotted period.  This gets reset to 0 at the allotted period')
+,('total_matches','detective','=','0',True,False,False,'the total number of matched records (if applicable) the Consumer has received since installing the app')
+,('matches_this_interval','detective','=','0',True,False,False,'the number of matched records (if applicable) the Consumer has received during the allotted period.  This gets reset to 0 at the allotted period')
+,('limit_reset_timestamp','detective','=','9998-01-01',True,False,False,'timestamp of when the counters will be reset');
 
 --CREATE RULES_DICTIONARY TABLE
 CREATE OR REPLACE TABLE METADATA.RULES_DICTIONARY(

@@ -72,15 +72,69 @@ GRANT USAGE ON SCHEMA util_app TO APPLICATION ROLE APP_ROLE;
 
 --create METADATA_C_V view for Consumer
 CREATE OR REPLACE SECURE VIEW UTIL_APP.METADATA_C_V COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"metadata_c_v","type":"secure_view"}}'
-AS SELECT * FROM METADATA.METADATA_V 
-    WHERE LOWER(consumer_name) = 
-    (SELECT LOWER(consumer_name) FROM METADATA.METADATA_V 
-      WHERE LOWER(account_locator) = LOWER(CURRENT_ACCOUNT())
-      AND LOWER(key) = LOWER('app_mode')
-      AND LOWER(value) = LOWER('[[APP_MODE]]'))
-    AND LOWER(account_locator) = LOWER(CURRENT_ACCOUNT()) AND LOWER(key) NOT IN ('auto_enable','app_key');
+AS 
+SELECT
+  ACCOUNT_LOCATOR
+  ,CONSUMER_NAME
+  ,KEY
+  ,IFF(
+    LOWER(KEY)='allowed_partners'
+    ,(
+        SELECT 
+            LISTAGG(f.VALUE:partner_name::STRING, ',')
+        FROM 
+            METADATA.METADATA_V m
+            ,TABLE(FLATTEN (input => PARSE_JSON(m.VALUE), PATH =>'allowed_partners')) f
+        WHERE LOWER(m.consumer_name) = 
+          (SELECT LOWER(consumer_name) 
+            FROM METADATA.METADATA_V 
+            WHERE LOWER(account_locator) = LOWER(CURRENT_ACCOUNT())
+            AND LOWER(key) = LOWER('app_mode')
+            AND LOWER(value) = LOWER('[[APP_MODE]]')
+          )
+          AND LOWER(m.account_locator) = LOWER(CURRENT_ACCOUNT()) 
+          AND LOWER(m.KEY) = 'allowed_partners'
+    )
+    ,value
+  ) AS value
+FROM METADATA.METADATA_V 
+WHERE LOWER(consumer_name) = 
+  (SELECT LOWER(consumer_name) 
+    FROM METADATA.METADATA_V 
+    WHERE LOWER(account_locator) = LOWER(CURRENT_ACCOUNT())
+    AND LOWER(key) = LOWER('app_mode')
+    AND LOWER(value) = LOWER('[[APP_MODE]]')
+  )
+AND LOWER(account_locator) = LOWER(CURRENT_ACCOUNT()) 
+AND LOWER(key) IN (SELECT LOWER(control_name) FROM METADATA.METADATA_DICTIONARY_V WHERE consumer_visible = TRUE);
 
 GRANT SELECT ON VIEW UTIL_APP.METADATA_C_V TO APPLICATION ROLE APP_ROLE;
+
+--create PARTNERS_C_V view
+CREATE OR REPLACE SECURE VIEW UTIL_APP.PARTNERS_C_V
+COMMENT = ''{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"partners_c_v","type":"secure_view"}}'
+AS
+SELECT 
+  f.value:partner_name::VARCHAR PARTNER_NAME
+  ,f.value:access_window::VARCHAR ACCESS_WINDOW
+  ,f.value:access_expiration_timestamp::TIMESTAMP_NTZ(6) ACCESS_EXPIRATION_DATE
+  ,f.value:access_expired::BOOLEAN ACCESS_EXPIRED
+  ,f.value:total_requests::NUMBER(38,0) TOTAL_REQUESTS
+  ,f.value:total_records_transcoded::NUMBER(38,0) TOTAL_RECORDS_TRANSCODED
+  ,f.value:last_request_timestamp::TIMESTAMP_NTZ(6) LAST_REQUEST_TIMESTAMP
+FROM 
+  METADATA.METADATA_V m
+  ,TABLE(FLATTEN (input => PARSE_JSON(m.VALUE), PATH =>'allowed_partners')) f
+WHERE LOWER(consumer_name) = 
+  (SELECT LOWER(consumer_name) FROM METADATA.METADATA_V 
+    WHERE LOWER(account_locator) = LOWER(CURRENT_ACCOUNT())
+    AND LOWER(key) = LOWER('app_mode')
+    AND LOWER(value) = LOWER('[[APP_MODE]]')
+    )
+AND LOWER(account_locator) = LOWER(CURRENT_ACCOUNT()) 
+AND LOWER(m.key) = 'allowed_partners';
+
+GRANT SELECT ON VIEW UTIL_APP.PARTNERS_C_V TO APPLICATION ROLE APP_ROLE;
 
 --create SCANNERS_C_V view for Consumer
 CREATE OR REPLACE SECURE VIEW UTIL_APP.SCANNERS_C_V COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"scanners_c_v","type":"secure_view"}}'
@@ -114,8 +168,6 @@ $$
                               SELECT \'input_records_this_interval\', \'0\' UNION ALL
                               SELECT \'total_records_processed\', \'0\' UNION ALL
                               SELECT \'records_processed_this_interval\', \'0\' UNION ALL
-                              SELECT \'total_matches\', \'0\' UNION ALL
-                              SELECT \'matches_this_interval\', \'0\' UNION ALL
                               SELECT \'last_request_timestamp\', \'9998-01-01\';';
     ELSE
       create_table_stmt := 'CREATE TABLE IF NOT EXISTS APP.LIMIT_TRACKER(key VARCHAR, value VARCHAR) AS
@@ -125,8 +177,6 @@ $$
                               SELECT \'input_records_this_interval\', value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = \'input_records_this_interval\' UNION ALL
                               SELECT \'total_records_processed\', value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = \'total_records_processed\' UNION ALL
                               SELECT \'records_processed_this_interval\', value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = \'records_processed_this_interval\' UNION ALL
-                              SELECT \'total_matches\', value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = \'total_matches\' UNION ALL
-                              SELECT \'matches_this_interval\', value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = \'matches_this_interval\' UNION ALL
                               SELECT \'last_request_timestamp\', value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = \'last_request_timestamp\';';
     END IF;
 
@@ -222,73 +272,6 @@ CREATE OR REPLACE PROCEDURE UTIL_APP.CONFIGURE_TRACKER()
       var rset = snowflake.execute({sqlText:`SELECT consumer_name FROM UTIL_APP.METADATA_C_V;`});
       rset.next();
       consumer_name = rset.getColumnValue(1);
-    }
-
-    if (app_mode.toLocaleLowerCase() != 'free') {
-      //create serverless task to check every 15 mins whether to reset the the counters based on the specified interval
-      snowflake.execute({sqlText:`CREATE OR REPLACE TASK APP.COUNTER_RESET_TASK
-                                        SCHEDULE = '15 minute'
-                                        COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"local_counter_reset","type":"task"}}'
-                                        AS
-                                        EXECUTE IMMEDIATE
-                                        \$\$
-                                          DECLARE
-                                            update_stmt VARCHAR;
-                                            log_reset VARCHAR;
-                                            current_timestamp TIMESTAMP_NTZ;
-                                            next_timestamp TIMESTAMP_NTZ;
-                                            res RESULTSET;
-                                            interval VARCHAR;
-                                            account_locator VARCHAR;
-                                            consumer_name VARCHAR;
-                                            app_key VARCHAR;
-                                            app_mode VARCHAR;
-                                            c_current_timestamp CURSOR FOR SELECT SYSDATE();
-                                            c_interval CURSOR FOR SELECT value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = 'limit_interval';
-                                            c_account_locator CURSOR FOR SELECT account_locator FROM UTIL_APP.METADATA_C_V LIMIT 1; 
-                                            c_consumer_name CURSOR FOR SELECT consumer_name FROM UTIL_APP.METADATA_C_V LIMIT 1; 
-                                            c_app_key CURSOR FOR SELECT app_key FROM APP.APP_KEY;
-                                            c_app_mode CURSOR FOR SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'app_mode';
-                                          BEGIN
-                                            OPEN c_current_timestamp;
-                                            FETCH c_current_timestamp INTO current_timestamp;
-
-                                            OPEN c_interval;
-                                            FETCH c_interval INTO interval;
-
-                                            OPEN c_account_locator;
-                                            FETCH c_account_locator INTO account_locator;
-
-                                            OPEN c_consumer_name;
-                                            FETCH c_consumer_name INTO consumer_name;
-
-                                            OPEN c_app_key;
-                                            FETCH c_app_key INTO app_key;
-
-                                            OPEN c_app_mode;
-                                            FETCH c_app_mode INTO app_mode;
-
-                                            LET next_stmt VARCHAR := 'SELECT value::timestamp_ntz + INTERVAL \\\'' || interval ||  '\\\' FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = \\\'limit_reset_timestamp\\\'';
-                                            res := (EXECUTE IMMEDIATE :next_stmt);
-                                            
-                                            LET c_next_timestamp CURSOR FOR res;
-                                            OPEN c_next_timestamp;
-                                            FETCH c_next_timestamp INTO next_timestamp;
-                                            
-                                            IF(current_timestamp >= next_timestamp) THEN
-                                              update_stmt := 'UPDATE APP.LIMIT_TRACKER SET value = \\\'0\\\' WHERE LOWER(key) IN (\\\'input_records_this_interval\\\',\\\'requests_processed_this_interval\\\', \\\'records_processed_this_interval\\\',\\\'matches_this_interval\\\')';
-                                              EXECUTE IMMEDIATE :update_stmt;
-
-                                              log_reset := 'CALL UTIL_APP.APP_LOGGER(\\\'' || account_locator || '\\\', \\\'' || consumer_name || '\\\', \\\'' || app_key || '\\\', \\\'' || app_mode || '\\\', \\\'log\\\', \\\'reset_counters\\\', \\\'""\\\', SYSDATE(), \\\'COMPLETE\\\', \\\'"Please reset counters for this consumer."\\\')';
-                                              EXECUTE IMMEDIATE :log_reset;    
-                                            END IF;
-
-                                            RETURN 'done';
-                                          END;
-                                        \$\$;`});
-
-      //start task
-      snowflake.execute({sqlText:`ALTER TASK APP.COUNTER_RESET_TASK RESUME;`});
     }
 
     //create serverless task send a heartbeat message once a day to keep the event streams alive
@@ -521,12 +504,11 @@ CREATE OR REPLACE SECURE PROCEDURE PROCS_APP.LOG_SHARE_INSERT()
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.all_procs table created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.allowed_procs_v view created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.metadata_c_v view created."');`});
+    snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.partners_c_v view created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.scanners_c_v view created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.app.heartbeat_task task created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.request_summary_c_v view created."');`});
-    if (app_mode.toLocaleLowerCase() != 'free') {
-      snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.configure_tracker procedure created."');`});
-    }
+    snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.configure_tracker procedure created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.register_single_callback procedure created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.streamlit streamlit created."');`});
     snowflake.execute({sqlText:`CALL UTIL_APP.APP_LOGGER('${account_locator}', '${consumer_name}', '${app_key_local}', '${app_mode}', 'log', 'install', '""', SYSDATE(), 'PROCESSING', '"${current_db.toLocaleLowerCase()}.util_app.app_logger procedure created."');`});
@@ -788,7 +770,7 @@ try {
     var limit = '';
     var limit_type = '';
     var limit_enforced = '';
-    var limit_check_logic = '';
+    var limit_check_logic = false;
 
     var results_record_count = 0;
     var results_record_count_distinct = 0;
@@ -868,7 +850,13 @@ try {
           //get limit from METADATA_C_V
           var rset = snowflake.execute({sqlText: `SELECT value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = 'limit';`});
           rset.next();
-          limit = parseInt(rset.getColumnValue(1));
+
+          if (rset.getColumnValue(1).toLocaleLowerCase() == 'unlimited') {
+            limit = rset.getColumnValue(1);
+            limit_check_logic = true
+          } else {
+            limit = parseInt(rset.getColumnValue(1));
+          }
 
           //get limit type METADATA_C_V
           var rset = snowflake.execute({sqlText: `SELECT value FROM UTIL_APP.METADATA_C_V WHERE LOWER(key) = 'limit_type';`});
@@ -896,11 +884,11 @@ try {
           var records_processed_this_interval = parseInt(rset.getColumnValue(1));
 
           //get limit check logic
-          if(limit_type.toLocaleLowerCase() == 'requests') {
+          if (limit_type.toLocaleLowerCase() == 'requests' && String(limit).toLocalLowerCase() != 'unlimited') {
             limit_check_logic = ((requests_processed_this_interval + 1) <= limit);
           }
           
-          if(limit_type.toLocaleLowerCase() == 'records') {
+          if (limit_type.toLocaleLowerCase() == 'records' && String(limit).toLocalLowerCase() != 'unlimited') {
             limit_check_logic = ((limit - records_processed_this_interval) > 0);
           }
 

@@ -1,0 +1,11 @@
+name: app_environment
+channels:
+  - snowflake
+dependencies:
+  - streamlit=1.39.0
+  - snowflake-native-apps-permission
+  - sqlparse=*
+  - streamlit-aggrid=*
+  - tabulate=*
+  - altair
+  - plotly
