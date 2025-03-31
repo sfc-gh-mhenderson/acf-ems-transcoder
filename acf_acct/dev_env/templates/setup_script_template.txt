@@ -112,7 +112,7 @@ GRANT SELECT ON VIEW UTIL_APP.METADATA_C_V TO APPLICATION ROLE APP_ROLE;
 
 --create PARTNERS_C_V view
 CREATE OR REPLACE SECURE VIEW UTIL_APP.PARTNERS_C_V
-COMMENT = ''{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"partners_c_v","type":"secure_view"}}'
+COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"partners_c_v","type":"secure_view"}}'
 AS
 SELECT 
   f.value:partner_name::VARCHAR PARTNER_NAME
@@ -884,11 +884,11 @@ try {
           var records_processed_this_interval = parseInt(rset.getColumnValue(1));
 
           //get limit check logic
-          if (limit_type.toLocaleLowerCase() == 'requests' && String(limit).toLocalLowerCase() != 'unlimited') {
+          if (limit_type.toLocaleLowerCase() == 'requests' && String(limit).toLocaleLowerCase() != 'unlimited') {
             limit_check_logic = ((requests_processed_this_interval + 1) <= limit);
           }
           
-          if (limit_type.toLocaleLowerCase() == 'records' && String(limit).toLocalLowerCase() != 'unlimited') {
+          if (limit_type.toLocaleLowerCase() == 'records' && String(limit).toLocaleLowerCase() != 'unlimited') {
             limit_check_logic = ((limit - records_processed_this_interval) > 0);
           }
 

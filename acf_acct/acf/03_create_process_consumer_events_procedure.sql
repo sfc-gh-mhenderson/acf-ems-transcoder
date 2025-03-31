@@ -322,14 +322,9 @@ $$
           }
         }
       } else {
-        var rset3 = snowflake.execute({sqlText: `SELECT default_value FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA_DICTIONARY WHERE LOWER(control_name) = 'allowed_procs';`});
-        rset3.next();
-        let allowed_procs = rset3.getColumnValue(1);
-
         //onboard consumer if FREE
         if(app_mode.toLocaleLowerCase() == 'free') {
           snowflake.execute({sqlText:`CALL P_&{APP_CODE}_ACF_DB.CONSUMER_MGMT.ONBOARD_CONSUMER('${consumer_account}', '${consumer_name}', OBJECT_CONSTRUCT('app_mode', 'free'
-                                                                                                                                    ,'allowed_procs', '${allowed_procs}'
                                                                                                                                     ,'limit','5'
                                                                                                                                     ,'limit_type','requests'
                                                                                                                                     ,'limit_interval', 'N/A'
@@ -353,7 +348,6 @@ $$
         //onboard consumer if PAID
         if(app_mode.toLocaleLowerCase() == 'paid') {
           snowflake.execute({sqlText:`CALL P_&{APP_CODE}_ACF_DB.CONSUMER_MGMT.ONBOARD_CONSUMER('${consumer_account}', '${consumer_name}', OBJECT_CONSTRUCT('app_mode', 'paid'
-                                                                                                                                    ,'allowed_procs', '${allowed_procs}'
                                                                                                                                     ,'limit','100000'
                                                                                                                                     ,'limit_type','records'
                                                                                                                                     ,'limit_interval', '30 day'

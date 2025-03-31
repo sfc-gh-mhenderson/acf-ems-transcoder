@@ -19,33 +19,6 @@ SET MY_WAREHOUSE = '<MY_WAREHOUSE>';
 
 USE ROLE IDENTIFIER($MY_ROLE);
 USE WAREHOUSE IDENTIFIER($MY_WAREHOUSE);
-
---create the event table, if the account does not have one
-CREATE DATABASE IF NOT EXISTS C_[[APP_CODE]]_HELPER_DB;
-CREATE SCHEMA IF NOT EXISTS C_[[APP_CODE]]_HELPER_DB.EVENTS;
-CREATE OR REPLACE PROCEDURE C_[[APP_CODE]]_HELPER_DB.EVENTS.DETECT_EVENT_TABLE()
-  RETURNS STRING
-  LANGUAGE JAVASCRIPT
-  COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"helper_db","component":"detect_event_table","type":"procedure"}}'
-  EXECUTE AS CALLER
-  AS
-  $$
-      snowflake.execute({sqlText:"SHOW PARAMETERS LIKE '%%event_table%%' IN ACCOUNT"});
-      var table_name = snowflake.execute({sqlText:'SELECT "value" FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));'});
-      table_name.next();
-      table_name = table_name.getColumnValue(1);
-      if(table_name == '')
-      {
-          snowflake.execute({sqlText:"CREATE DATABASE IF NOT EXISTS EVENTS"});
-          snowflake.execute({sqlText:"CREATE SCHEMA IF NOT EXISTS EVENTS"});
-          snowflake.execute({sqlText:"CREATE EVENT TABLE IF NOT EXISTS EVENTS"});
-          snowflake.execute({sqlText:"ALTER ACCOUNT SET EVENT_TABLE = EVENTS.EVENTS.EVENTS"});
-          return 'ADDED EVENT TABLE'
-      }
-      return table_name
-  $$;
-
-CALL C_[[APP_CODE]]_HELPER_DB.EVENTS.DETECT_EVENT_TABLE();
 [[TC_ACCESS]]
 --grant account privileges to application
 GRANT EXECUTE TASK ON ACCOUNT TO APPLICATION IDENTIFIER($APP_NAME);

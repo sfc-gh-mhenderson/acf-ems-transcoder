@@ -157,6 +157,7 @@ CREATE OR REPLACE TABLE METADATA.METADATA_DICTIONARY(
 --INSERT DEFAULT VALUES
 INSERT INTO METADATA.METADATA_DICTIONARY VALUES
 ('app_mode','detective','=','enterprise',True,True,True,'the version of the app the Consumer has installed.')
+,('cliet_code','detective','=','',True,True,False,'the version of the app the Consumer has installed.')
 ,('allowed_procs','preventive','=','transcode',True,True,True,'the comma-separated list of application stored procedures the Provider allows the Consumer to access (ideal for Providers that offer multiple types of functionality in their application)')
 ,('allowed_funcs','preventive','=','',True,True,True,'the comma-separated list of application user-defined functions the Provider allows the Consumer to access (ideal for Providers that offer multiple types of functionality in their application)')
 ,('record_cost','detective','=','0.05',True,True,True,'the per-record cost for using this solution.')
@@ -213,6 +214,36 @@ INSERT INTO METADATA.METADATA(account_locator, consumer_name, key, value) VALUES
 ,('global', '', 'trust_center_lookback_in_days','1')
 --add any custom global values here 
 ;
+
+--CREATE CONSUMER_ALLOWED_PARTNERS_V view
+CREATE OR REPLACE METADATA.CONSUMER_ALLOWED_PARTNERS_V AS
+SELECT
+  m.ACCOUNT_LOCATOR
+  ,m.CONSUMER_NAME
+  ,f.value:partner_name::VARCHAR PARTNER_NAME
+  ,f.value:access_window::VARCHAR ACCESS_WINDOW
+  ,f.value:access_expiration_timestamp::TIMESTAMP_NTZ(6) ACCESS_EXPIRATION_DATE
+  ,f.value:access_expired::BOOLEAN ACCESS_EXPIRED
+  ,SUM(f.value:total_requests::NUMBER(38,0)) TOTAL_REQUESTS
+  ,SUM(f.value:total_records_transcoded::NUMBER(38,0)) TOTAL_RECORDS_TRANSCODED
+  ,MAX(f.value:last_request_timestamp::TIMESTAMP_NTZ(6)) LAST_REQUEST_TIMESTAMP
+FROM 
+  METADATA.METADATA m
+  ,TABLE(FLATTEN (input => PARSE_JSON(m.VALUE), PATH =>'allowed_partners')) f
+WHERE LOWER(m.key) = 'allowed_partners'
+GROUP BY 
+    m.ACCOUNT_LOCATOR
+    , m.CONSUMER_NAME
+    ,PARTNER_NAME
+    ,ACCESS_WINDOW
+    ,ACCESS_EXPIRATION_DATE
+    ,ACCESS_EXPIRED
+ORDER BY
+    m.ACCOUNT_LOCATOR
+    ,m.CONSUMER_NAME
+    ,ACCESS_EXPIRATION_DATE ASC
+    ,PARTNER_NAME
+  ;
 
 --CREATE SCANNERS TABLE
 CREATE OR REPLACE TABLE TRUST_CENTER.SCANNERS(

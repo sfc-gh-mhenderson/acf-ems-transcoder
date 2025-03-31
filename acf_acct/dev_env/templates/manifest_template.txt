@@ -35,16 +35,16 @@ privileges:
       description: "Permission to access Snowflake DB"
 
 references:
-  - enrichment_table:
-        label: "Enrichment Table"
+  - transcode_table:
+        label: "Transcode Table"
         description: "Select data table"
         privileges:
         - SELECT
         object_type: TABLE
         multi_valued: true
         register_callback: util_app.register_single_callback
-  - enrichment_view:
-        label: "Enrichment View"
+  - transcode_view:
+        label: "Transcode View"
         description: "Select data view"
         privileges:
         - SELECT

@@ -28,7 +28,7 @@ def create_app_package(app_code, app_pkg_name, source_table_list):
   create_metadata_v = """CREATE OR REPLACE SECURE VIEW """+app_pkg_name+""".METADATA.METADATA_V CHANGE_TRACKING=TRUE COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"metadata_v","type":"secure_view"}}'
   AS SELECT * FROM P_""" +app_code+"""_ACF_DB.METADATA.METADATA"""
   
-  #create metadata_v view
+  #create metadata_dictionary_v view
   create_metadata_dictionary_v = """CREATE OR REPLACE SECURE VIEW """+app_pkg_name+""".METADATA.METADATA_DICTIONARY_V CHANGE_TRACKING=TRUE COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"metadata_v","type":"secure_view"}}'
   AS SELECT * FROM P_""" +app_code+"""_ACF_DB.METADATA.METADATA_DICTIONARY"""
   

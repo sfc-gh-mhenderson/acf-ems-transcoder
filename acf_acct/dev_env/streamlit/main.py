@@ -19,7 +19,7 @@ import sqlparse
 from sqlparse.sql import IdentifierList, Identifier
 from sqlparse.tokens import Keyword, DML
 import time
-import utils.utils as u
+import utils as u
 
 if "page" not in st.session_state:
     st.session_state.page = "home"
@@ -160,6 +160,12 @@ def selectbox_callback(wizard, val, idx, sb_list):
                 st.session_state.luid_column_list = ["N/A"] + st.session_state.luid_column_list
             
             st.session_state.sb_select_luid_col_idx = st.session_state.luid_column_list.index(st.session_state.luid_column)
+            
+            if st.session_state[val] == "N/A" and st.session_state.luid_column == "N/A":
+                st.session_state.disable_step_3 = True
+                
+            if st.session_state[val] != "N/A" or st.session_state.luid_column != "N/A":
+                st.session_state.disable_step_3 = False
 
         if val == "sb_select_luid_col":
             pid_symmetric_set_diff = set(st.session_state.master_column_list) ^ {st.session_state[val]} #master list minus selected luid col
@@ -170,6 +176,12 @@ def selectbox_callback(wizard, val, idx, sb_list):
                 st.session_state.pid_column_list = ["N/A"] + st.session_state.pid_column_list
 
             st.session_state.sb_select_pid_col_idx = st.session_state.pid_column_list.index(st.session_state.pid_column)
+            
+            if st.session_state[val] == "N/A" and st.session_state.pid_column == "N/A":
+                st.session_state.disable_step_3 = True
+                
+            if st.session_state[val] != "N/A" or st.session_state.pid_column != "N/A":
+                st.session_state.disable_step_3 = False
 
     else:
        st.session_state[idx] = 0 
@@ -179,8 +191,6 @@ def selectbox_callback(wizard, val, idx, sb_list):
         if st.session_state.current_step == 1:
             if st.session_state.results_table_name != "":
                 st.session_state.disable_step_2 = False
-        if st.session_state.current_step == 2:
-            st.session_state.disable_step_3 = False
         if st.session_state.current_step == 3:
             st.session_state.disable_step_4 = False
 
@@ -246,6 +256,22 @@ def app_settings():
               
     with col2:
         st.markdown(df_app_settings_2.style.set_properties(subset=[df_app_settings_2.columns[0]], **{'background-color': '#DFDFDF', 'color': 'black', 'font-weight': 'bold'}).set_properties(**{'color': '#000000','font-size': '14px','font-weight':'regular', 'width':'350px'}).hide(axis = "index").hide(axis = "columns").to_html(), unsafe_allow_html = True)
+             
+             
+@st.dialog("Partner Settings")
+def partner_settings():
+    st.html("<span class='medium-dialog'></span>")
+    df_partner_settings = pd.DataFrame(session.sql("""SELECT 
+                                                            PARTNER_NAME AS "Partner Name"
+                                                            ,ACCESS_WINDOW AS "Access Window"
+                                                            ,ACCESS_EXPIRATION_DATE AS "Access Expiration"
+                                                            ,ACCESS_EXPIRED AS "Access Expired?"
+                                                            ,TOTAL_REQUESTS AS "Total Requests"
+                                                            ,TOTAL_RECORDS_TRANSCODED AS "Total Records Transcoded"
+                                                            ,LAST_REQUEST_TIMESTAMP AS "Last Request Timestamp"
+                                                        FROM UTIL_APP.PARTNERS_C_V""").collect())
+    st.markdown(df_partner_settings.style.set_table_styles([{'selector': 'th', 'props': [('font-size', '14px'), ('font-weight', 'bold'), ('background-color','#DFDFDF')]}]).set_properties(**{'color': '#000000','font-size': '14px','font-weight':'regular', 'width':'350px'}).hide(axis = "index").to_html(), unsafe_allow_html = True)
+
              
 
 def render_transcode_wizard():
@@ -457,8 +483,12 @@ def render_transcode_wizard():
                 if st.session_state.pid_column != "N/A" and st.session_state.luid_column != "N/A":
                     st.session_state.key_type = "PID_LUID"
                 
+                #disable step 3 if PID/LUID column is "N/A" or empty
+                if st.session_state.pid_column in ["N/A", ""] and st.session_state.luid_column in ["N/A", ""]:
+                    st.session_state.disable_step_3 = True
+                    
                 #enable step 3
-                if st.session_state.pid_column != "N/A" or st.session_state.luid_column != "N/A":
+                if st.session_state.pid_column not in ["N/A", ""] or st.session_state.luid_column not in ["N/A", ""]:
                     st.session_state.disable_step_3 = False
                     
                 
@@ -548,18 +578,17 @@ def render_transcode_wizard():
                 session.sql(f"CREATE OR REPLACE VIEW UTIL_APP.{st.session_state.picked_obj} AS SELECT {pid_luid_sel_str} FROM reference('{st.session_state.ref}','{st.session_state.refs_selected[st.session_state.picked_obj]}')").collect()
                 input_table = f"UTIL_APP.{st.session_state.picked_obj}"
                 results_table = f"RESULTS_APP.{st.session_state.results_table_name}"
+                partners_csv = ",".join(st.session_state.transcoding_partners)
                     
                 with st.spinner("Transcoding..."):
-                    call_request = session.sql(f"CALL PROCS_APP.REQUEST(OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{results_table}', 'proc_name','transcode', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('{input_table}','{st.session_state.pid_column}','{st.session_state.luid_column}''{st.session_state.key_type}','{st.session_state["transcoding_partners"].split(",")}','{results_table}'))::varchar)").collect()
+                    call_request = session.sql(f"CALL PROCS_APP.REQUEST(OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{results_table}', 'proc_name','transcode', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('{input_table}','{st.session_state.pid_column}','{st.session_state.luid_column}','{partners_csv}','{results_table}'))::varchar)").collect()
                     result = pd.DataFrame(call_request).iloc[0]['REQUEST']
                     
-                    if 'ERROR:' in result:
-                        st.error("**Call Failed**", icon="🚨")
+                    if any(err in result.lower() for err in ["error", "failed"]):
+                        st.error("**Transcoding Failed**", icon="🚨")
                         st.write(result)
                     else :
                         st.success(f"Transcoding complete. Results table is located in {results_table} 🎉")
-                        time.sleep(3)
-                        st.rerun()
                         
                     #drop input view
                     session.sql(f"DROP VIEW IF EXISTS UTIL_APP.{st.session_state.picked_obj}").collect()
@@ -603,12 +632,12 @@ def render_run_history_view():
 
     df_transcode_log = pd.DataFrame(session.sql(f"""SELECT
                                                         MSG:event_attributes[0]:request_id::VARCHAR request_id
-                                                        ,MAX(MSG:message:input_object::VARCHAR) input_object
-                                                        ,MAX(MSG:message:key_type::VARCHAR) key_type
-                                                        ,MAX(MSG:message:pid_column::VARCHAR) pid_column
-                                                        ,MAX(MSG:message:luid_column::VARCHAR) luid_column
-                                                        ,MSG:message:partners::VARCHAR partners
-                                                        ,MAX(MSG:message:results_table::VARCHAR) results_table
+                                                        ,MAX(MSG:message:metrics:input_object::VARCHAR) input_object
+                                                        ,MAX(MSG:message:metrics:key_type::VARCHAR) key_type
+                                                        ,MAX(MSG:message:metrics:pid_column::VARCHAR) pid_column
+                                                        ,MAX(MSG:message:metrics:luid_column::VARCHAR) luid_column
+                                                        ,MSG:message:metrics:partners::VARCHAR partners
+                                                        ,MAX(MSG:message:metrics:results_table::VARCHAR) results_table
                                                         ,MAX(MSG:message:metrics:total_records::NUMBER(38,0)) total_records
                                                         ,MIN(MSG:status::VARCHAR) status
                                                         ,MAX(MSG:message:metrics:start_timestamp::VARCHAR) start_timestamp
@@ -617,7 +646,7 @@ def render_run_history_view():
                                                     WHERE LOWER(MSG:entry_type) = 'metric'
                                                     AND LOWER(MSG:message:metric_type) = 'transcode_summary'
                                                     GROUP BY 1,6
-                                                    ORDER BY 1,2,10;""").collect())
+                                                    ORDER BY 11 DESC;""").collect())
 
     for index, row in df_transcode_log.iterrows():
         request_id = str(row["REQUEST_ID"])
@@ -640,7 +669,8 @@ def render_run_history_view():
         col4.markdown(f'<span style="font-size: 12px;">{pid_column}</span>', unsafe_allow_html=True)
         col5.markdown(f'<span style="font-size: 12px;">{luid_column}</span>', unsafe_allow_html=True)
         
-        for p in partners.split(","):
+        for p_dict in json.loads(partners):
+            p = p_dict["partner_name"]
             col6.markdown(f'<li style="font-size: 12px;">{p.strip()}</li>', unsafe_allow_html=True)
         
         col7.markdown(f'<span style="font-size: 12px;">{results_table}</span>', unsafe_allow_html=True)
@@ -697,7 +727,7 @@ class BasePage(Page):
         col1, col2, col3 = st.columns([0.1,2.5,0.1])
 
         with col2:
-            u.render_image("img/Experian_logo.png")
+            u.render_image("Experian_logo.png")
             
             app_mode = ''
             
@@ -729,7 +759,7 @@ class home(BasePage):
         app_name = pd.DataFrame(session.sql("SELECT CURRENT_DATABASE()").collect()).iloc[0,0]
         df_metadata_c_v = pd.DataFrame(session.sql(f"SELECT account_locator FROM {app_name}.UTIL_APP.METADATA_C_V").collect())
         
-        if not df_metadata_c_v:
+        if not df_metadata_c_v.empty:
             try :
                 app_mode = pd.DataFrame(session.sql("SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'app_mode'").collect()).iloc[0,0]
                 account_locator = pd.DataFrame(session.sql(f"SELECT account_locator FROM {app_name}.UTIL_APP.METADATA_C_V LIMIT 1").collect()).iloc[0,0]
@@ -771,51 +801,70 @@ class home(BasePage):
 
                     st.divider()
         
-                    col1, col2, col3 = st.columns(3, gap="small")
-        
+                    col1, col2 = st.columns(2, gap="small")
                     with col1:
                         st.markdown("<h3 style='text-align: center; color: black;'>Transcode</h3>", unsafe_allow_html=True)
-                        
-                        cq_col1, cq_col2, cq_col3 = st.columns([0.1,1,0.1], gap="small")
+                        cq_col1, cq_col2, cq_col3 = st.columns([0.3,0.75,0.25], gap="small")
                         with cq_col2:  
-                            u.render_image_menu("img/ra_table.png")
+                            u.render_image_menu("ra_table.png")
                         st.markdown("""
-                                    Choose table or view that contains your Experian PIDs/LUIDs to transcode. 
-                                    """)
+                                        Choose table or view that contains your Experian PIDs/LUIDs to transcode. 
+                                        """)
                         st.write("")
 
-                        cq_col1, cq_col2, cq_col3 = st.columns([0.1,0.35,0.1], gap="small")
+                        cq_col1, cq_col2, cq_col3 = st.columns([0.4,0.75,0.25], gap="small")
                         with cq_col2: 
                             st.button("Transcode", type="primary", on_click=set_page,args=("transcode",), key="btn_transcode") 
-        
+                    
                     with col2:
                         st.markdown("<h3 style='text-align: center; color: black;'>Run History</h3>", unsafe_allow_html=True)
-                        qc_col1, qc_col2, qc_col3 = st.columns([0.1,1,0.1], gap="small")
+                        qc_col1, qc_col2, qc_col3 = st.columns([0.3,0.75,0.25], gap="small")
                         with qc_col2:  
-                            u.render_image_menu("img/analytics.png")
+                            u.render_image_menu("analytics.png")
                         st.markdown("""
-                                    View details of transcoding run history, including results table preview. 
-                                    """)
+                                        View details of transcoding run history, including results table preview. 
+                                        """)
                         st.write("") 
 
-                        qc_col1, qc_col2, qc_col3 = st.columns([0.1,0.425,0.1], gap="small")
+                        qc_col1, qc_col2, qc_col3 = st.columns([0.4,0.75,0.25], gap="small")
                         with qc_col2:
-                            st.button("Run History", type="primary", on_click=set_page,args=("run_history",), key="btn_run_history")
-
-                    with col3:
+                                st.button("Run History", type="primary", on_click=set_page,args=("run_history",), key="btn_run_history")
+                            
+                    st.write("")
+                    st.write("")
+                    st.write("")
+                    st.write("")
+                    
+                    col1, col2 = st.columns(2, gap="small")
+                    with col1:
                         st.markdown("<h3 style='text-align: center; color: black;'>App Settings</h3>", unsafe_allow_html=True)
-                        cq_col1, cq_col2, cq_col3 = st.columns([0.1,1,0.1], gap="small")
+                        cq_col1, cq_col2, cq_col3 = st.columns([0.275,0.75,0.25], gap="small")
                         with cq_col2:  
-                            u.render_image_menu("img/ra_table.png")
+                            u.render_image_menu("services.png")
                         st.markdown("""
-                                    View app settings, including allowed transcoding partners, usage expiration, etc. 
-                                    """)
+                                        View app settings, including number or requests, records processed, etc. 
+                                        """)
                         st.write("")
 
-                        cq_col1, cq_col2, cq_col3 = st.columns([0.1,0.45,0.1], gap="small")
+                        cq_col1, cq_col2, cq_col3 = st.columns([0.35,0.75,0.25], gap="small")
                         with cq_col2: 
                             if st.button("App Settings", type="primary"):
-                                app_settings()    
+                                app_settings()
+                            
+                    with col2:
+                        st.markdown("<h3 style='text-align: center; color: black;'>Partner Settings</h3>", unsafe_allow_html=True)
+                        cq_col1, cq_col2, cq_col3 = st.columns([0.25,0.75,0.25], gap="small")
+                        with cq_col2:  
+                            u.render_image_menu("users.png")
+                        st.markdown("""
+                                        View allowed transcoding partners, usage expiration, etc. 
+                                        """)
+                        st.write("")
+
+                        cq_col1, cq_col2, cq_col3 = st.columns([0.25,0.75,0.25], gap="small")
+                        with cq_col2: 
+                            if st.button("Partner Settings", type="primary"):
+                                partner_settings()  
                 else:
                     st.warning("Your app usage has been disabled. Please contact us if you would like to re-enable your app usage.")
                     st.button('Contact Us', key='contact_2', type="primary", on_click=set_page,args=("contact",))
@@ -823,7 +872,7 @@ class home(BasePage):
                 st.warning("Please wait a moment while we finish onboarding your account. This automated process may take a few minutes. If you continue to have issues, please contact us immediately.")
                 st.button('Contact Us', key='contact_3', type="primary", on_click=set_page,args=("contact",))         
         else:
-            st.error('This account has not been onboarded. Please consult Provider to get enabled to use this app.', icon="🚨")
+            st.error('This account has not been onboarded. Please consult Experian to get enabled to use this app.', icon="🚨")
 
 
 ########################################################################### Transcode
