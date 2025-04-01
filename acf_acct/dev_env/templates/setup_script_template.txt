@@ -94,6 +94,7 @@ SELECT
           )
           AND LOWER(m.account_locator) = LOWER(CURRENT_ACCOUNT()) 
           AND LOWER(m.KEY) = 'allowed_partners'
+          AND f.VALUE:access_expired::BOOLEAN = false
     )
     ,value
   ) AS value

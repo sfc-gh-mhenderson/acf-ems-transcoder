@@ -19,7 +19,7 @@ import sqlparse
 from sqlparse.sql import IdentifierList, Identifier
 from sqlparse.tokens import Keyword, DML
 import time
-import utils as u
+import utils.utils as u #remevoe utils. prefix when deploying
 
 if "page" not in st.session_state:
     st.session_state.page = "home"
@@ -432,6 +432,10 @@ def render_transcode_wizard():
                                            , args = ("transcode","results_table_name","txt_results_table_name")
                                            )
                 if txt_results_table_name != "":
+                    tableName = txt_results_table_name.text.rsplit('.', 1)[-1]
+
+                    if session.sql(f"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'RESULTS_APP' AND TABLE_NAME = '{tableName}';").collect()[0][0] > 0:
+                        st.warning(f"Warning: Table '{tableName}' already exists in schema 'RESULTS_APP' and will be overwritten if you continue.")
                     st.session_state.disable_step_2 = False
             
     ###### Step 2: Select PID and LUID columns ######
@@ -519,7 +523,15 @@ def render_transcode_wizard():
             st.success(f"Partners Selected: \n{partner_str}")
             
             st.session_state.disable_step_4 = False
-        
+
+            #Check if requested partners are were proccessed in last 24 hours or are in progress
+            partnersProcessed = session.sql(f"""SELECT upper(listagg(parse_json(MSG:message:metrics:partners)[0]:partner_name::VARCHAR, ',')) as partner_name
+                            FROM P_URQUAN_JJ_SOURCE_DB_DEV.APP.METRICS
+                            where DATEDIFF('HOUR', TO_TIMESTAMP(MSG:message:metrics:start_timestamp::VARCHAR), SYSTIMESTAMP()) <= 724;""").collect()[0][0]
+            partnersProcessedList = partnersProcessed.split(',')
+            upperTranscodePartnerlist = list(map(str.upper, st.session_state.transcoding_partners))
+            if all(item in partnersProcessedList for item in upperTranscodePartnerlist) and len(st.session_state.transcoding_partners) > 0:
+                st.warning("Note: The selected partners have recently been processed or are in process. Continuing will process the partners again.")
         
     ###### Step 4: Confirm Settings and Transcode ######
     if st.session_state.current_step == 4:
@@ -593,7 +605,7 @@ def render_transcode_wizard():
                     #drop input view
                     session.sql(f"DROP VIEW IF EXISTS UTIL_APP.{st.session_state.picked_obj}").collect()
             else:
-                st.error("**Either a PID and/or LUID column was not selected or an inalid Key Type was supplied. Please check the Transcodeing Settings and try again.**", icon="🚨")               
+                st.error("**Either a PID and/or LUID column was not selected or an invalid Key Type was supplied. Please check the Transcodeing Settings and try again.**", icon="🚨")               
 
 
     ###### Bottom Navigation ###### 
@@ -639,9 +651,14 @@ def render_run_history_view():
                                                         ,MSG:message:metrics:partners::VARCHAR partners
                                                         ,MAX(MSG:message:metrics:results_table::VARCHAR) results_table
                                                         ,MAX(MSG:message:metrics:total_records::NUMBER(38,0)) total_records
-                                                        ,MIN(MSG:status::VARCHAR) status
-                                                        ,MAX(MSG:message:metrics:start_timestamp::VARCHAR) start_timestamp
-                                                        ,MAX(MSG:message:metrics:end_timestamp::VARCHAR) end_timestamp
+                                                        ,CASE 
+                                                            WHEN DATEDIFF('HOUR', TO_TIMESTAMP(MAX(MSG:message:metrics:start_timestamp::VARCHAR)), SYSTIMESTAMP()) >= 24 
+                                                                AND MIN(MSG:status::VARCHAR) <> 'COMPLETE'
+                                                            THEN 'FAILED'
+                                                            ELSE MIN(MSG:status::VARCHAR)
+                                                        END as status
+                                                        ,LEFT(MAX(MSG:message:metrics:start_timestamp::VARCHAR), 19) start_timestamp
+                                                        ,LEFT(MAX(MSG:message:metrics:end_timestamp::VARCHAR), 19) end_timestamp
                                                     FROM APP.METRICS
                                                     WHERE LOWER(MSG:entry_type) = 'metric'
                                                     AND LOWER(MSG:message:metric_type) = 'transcode_summary'
@@ -727,7 +744,7 @@ class BasePage(Page):
         col1, col2, col3 = st.columns([0.1,2.5,0.1])
 
         with col2:
-            u.render_image("Experian_logo.png")
+            u.render_image("img/Experian_logo.png")
             
             app_mode = ''
             
@@ -806,7 +823,7 @@ class home(BasePage):
                         st.markdown("<h3 style='text-align: center; color: black;'>Transcode</h3>", unsafe_allow_html=True)
                         cq_col1, cq_col2, cq_col3 = st.columns([0.3,0.75,0.25], gap="small")
                         with cq_col2:  
-                            u.render_image_menu("ra_table.png")
+                            u.render_image_menu("img/ra_table.png")
                         st.markdown("""
                                         Choose table or view that contains your Experian PIDs/LUIDs to transcode. 
                                         """)
@@ -820,7 +837,7 @@ class home(BasePage):
                         st.markdown("<h3 style='text-align: center; color: black;'>Run History</h3>", unsafe_allow_html=True)
                         qc_col1, qc_col2, qc_col3 = st.columns([0.3,0.75,0.25], gap="small")
                         with qc_col2:  
-                            u.render_image_menu("analytics.png")
+                            u.render_image_menu("img/analytics.png")
                         st.markdown("""
                                         View details of transcoding run history, including results table preview. 
                                         """)
@@ -840,7 +857,7 @@ class home(BasePage):
                         st.markdown("<h3 style='text-align: center; color: black;'>App Settings</h3>", unsafe_allow_html=True)
                         cq_col1, cq_col2, cq_col3 = st.columns([0.275,0.75,0.25], gap="small")
                         with cq_col2:  
-                            u.render_image_menu("services.png")
+                            u.render_image_menu("img/services.png")
                         st.markdown("""
                                         View app settings, including number or requests, records processed, etc. 
                                         """)
@@ -855,7 +872,7 @@ class home(BasePage):
                         st.markdown("<h3 style='text-align: center; color: black;'>Partner Settings</h3>", unsafe_allow_html=True)
                         cq_col1, cq_col2, cq_col3 = st.columns([0.25,0.75,0.25], gap="small")
                         with cq_col2:  
-                            u.render_image_menu("users.png")
+                            u.render_image_menu("img/users.png")
                         st.markdown("""
                                         View allowed transcoding partners, usage expiration, etc. 
                                         """)
