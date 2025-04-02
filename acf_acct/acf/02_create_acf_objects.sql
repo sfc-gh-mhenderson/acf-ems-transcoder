@@ -215,8 +215,14 @@ INSERT INTO METADATA.METADATA(account_locator, consumer_name, key, value) VALUES
 --add any custom global values here 
 ;
 
+--create PARTNERS table
+CREATE OR REPLACE TABLE METADATA.PARTNERS(client_code VARCHAR, partner_name VARCHAR)
+COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"acf","component":"partners","type":"table"}}';
+;
+
 --CREATE CONSUMER_ALLOWED_PARTNERS_V view
-CREATE OR REPLACE METADATA.CONSUMER_ALLOWED_PARTNERS_V AS
+CREATE OR REPLACE VIEW METADATA.CONSUMER_ALLOWED_PARTNERS_V COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"acf","component":"consumer_allowed_partners_v","type":"table"}}'
+AS
 SELECT
   m.ACCOUNT_LOCATOR
   ,m.CONSUMER_NAME
