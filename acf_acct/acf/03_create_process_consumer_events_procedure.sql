@@ -196,11 +196,11 @@ $$
     let partner_total_requests = partner_metadata_obj.total_requests + 1;
     let partner_total_records_transcoded = partner_metadata_obj.total_records_transcoded + total_records_transcoded;
     let partner_access_expiration_timestamp = partner_metadata_obj.access_expiration_timestamp;
-    let partner_access_expiration_flag = partner_metadata_obj.access_expired;
+    let partner_access_granted_flag = partner_metadata_obj.access_granted;
 
-    //set expiration flag to true if last_request_timestamp >= access_expiration_timestamp
+    //set access granted flag to false if last_request_timestamp >= access_expiration_timestamp
     if (last_request_timestamp >= partner_access_expiration_timestamp){
-      partner_access_expiration_flag = true;
+      partner_access_granted_flag = false;
     }
 
     //update partner metadata
@@ -216,8 +216,8 @@ $$
                                                 , 'last_request_timestamp'
                                                 , '${end_timestamp}'
                                                 , true)
-                                              , 'access_expired'
-                                              , ${partner_access_expiration_flag}
+                                              , 'access_granted'
+                                              , ${partner_access_granted_flag}
                                               , true)  partner 
                                       FROM P_&{APP_CODE}_ACF_DB.METADATA.METADATA m, 
                                       LATERAL FLATTEN(input=>PARSE_JSON(m.value):allowed_partners) p
