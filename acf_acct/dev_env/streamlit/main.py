@@ -432,7 +432,7 @@ def render_transcode_wizard():
                                            , args = ("transcode","results_table_name","txt_results_table_name")
                                            )
                 if txt_results_table_name != "":
-                    tableName = txt_results_table_name.text.rsplit('.', 1)[-1]
+                    tableName = txt_results_table_name.rsplit('.', 1)[-1]
 
                     if session.sql(f"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'RESULTS_APP' AND TABLE_NAME = '{tableName}';").collect()[0][0] > 0:
                         st.warning(f"Warning: Table '{tableName}' already exists in schema 'RESULTS_APP' and will be overwritten if you continue.")
@@ -526,8 +526,8 @@ def render_transcode_wizard():
 
             #Check if requested partners are were proccessed in last 24 hours or are in progress
             partnersProcessed = session.sql(f"""SELECT upper(listagg(parse_json(MSG:message:metrics:partners)[0]:partner_name::VARCHAR, ',')) as partner_name
-                            FROM P_URQUAN_JJ_SOURCE_DB_DEV.APP.METRICS
-                            where DATEDIFF('HOUR', TO_TIMESTAMP(MSG:message:metrics:start_timestamp::VARCHAR), SYSTIMESTAMP()) <= 724;""").collect()[0][0]
+                            FROM APP.METRICS
+                            where DATEDIFF('HOUR', TO_TIMESTAMP(MSG:message:metrics:start_timestamp::VARCHAR), SYSTIMESTAMP()) <= 24;""").collect()[0][0]
             partnersProcessedList = partnersProcessed.split(',')
             upperTranscodePartnerlist = list(map(str.upper, st.session_state.transcoding_partners))
             if all(item in partnersProcessedList for item in upperTranscodePartnerlist) and len(st.session_state.transcoding_partners) > 0:
@@ -574,39 +574,24 @@ def render_transcode_wizard():
         st.write("")
 
         if flag_transcode:
-            #set cols to select based on key_type
-            pid_luid_sel_str = ""
+            #create a view of the consumer's input table, based on selected columns
+            session.sql(f"CREATE OR REPLACE VIEW UTIL_APP.{st.session_state.picked_obj} AS SELECT * FROM reference('{st.session_state.ref}','{st.session_state.refs_selected[st.session_state.picked_obj]}')").collect()
+            input_table = f"UTIL_APP.{st.session_state.picked_obj}"
+            results_table = f"RESULTS_APP.{st.session_state.results_table_name}"
+            partners_csv = ",".join(st.session_state.transcoding_partners)
                 
-            match st.session_state.key_type:
-                case "PID":
-                    pid_luid_sel_str = f"{st.session_state.pid_column}"
-                case "LUID":
-                    pid_luid_sel_str = f"{st.session_state.luid_column}"
-                case "PID_LUID":
-                    pid_luid_sel_str = f"{st.session_state.pid_column},{st.session_state.luid_column}"
+            with st.spinner("Transcoding..."):
+                call_request = session.sql(f"CALL PROCS_APP.REQUEST(OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{results_table}', 'proc_name','transcode', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('{input_table}','{st.session_state.pid_column}','{st.session_state.luid_column}','{partners_csv}','{results_table}'))::varchar)").collect()
+                result = pd.DataFrame(call_request).iloc[0]['REQUEST']
                 
-            if pid_luid_sel_str != "":
-                #create a view of the consumer's input table, based on selected columns
-                session.sql(f"CREATE OR REPLACE VIEW UTIL_APP.{st.session_state.picked_obj} AS SELECT {pid_luid_sel_str} FROM reference('{st.session_state.ref}','{st.session_state.refs_selected[st.session_state.picked_obj]}')").collect()
-                input_table = f"UTIL_APP.{st.session_state.picked_obj}"
-                results_table = f"RESULTS_APP.{st.session_state.results_table_name}"
-                partners_csv = ",".join(st.session_state.transcoding_partners)
+                if any(err in result.lower() for err in ["error", "failed"]):
+                    st.error("**Transcoding Failed**", icon="🚨")
+                    st.write(result)
+                else :
+                    st.success(f"Transcoding complete. Results table is located in {results_table} 🎉")
                     
-                with st.spinner("Transcoding..."):
-                    call_request = session.sql(f"CALL PROCS_APP.REQUEST(OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{results_table}', 'proc_name','transcode', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('{input_table}','{st.session_state.pid_column}','{st.session_state.luid_column}','{partners_csv}','{results_table}'))::varchar)").collect()
-                    result = pd.DataFrame(call_request).iloc[0]['REQUEST']
-                    
-                    if any(err in result.lower() for err in ["error", "failed"]):
-                        st.error("**Transcoding Failed**", icon="🚨")
-                        st.write(result)
-                    else :
-                        st.success(f"Transcoding complete. Results table is located in {results_table} 🎉")
-                        
-                    #drop input view
-                    session.sql(f"DROP VIEW IF EXISTS UTIL_APP.{st.session_state.picked_obj}").collect()
-            else:
-                st.error("**Either a PID and/or LUID column was not selected or an invalid Key Type was supplied. Please check the Transcodeing Settings and try again.**", icon="🚨")               
-
+                #drop input view
+                session.sql(f"DROP VIEW IF EXISTS UTIL_APP.{st.session_state.picked_obj}").collect()
 
     ###### Bottom Navigation ###### 
     st.divider()
@@ -656,7 +641,7 @@ def render_run_history_view():
                                                                 AND MIN(MSG:status::VARCHAR) <> 'COMPLETE'
                                                             THEN 'FAILED'
                                                             ELSE MIN(MSG:status::VARCHAR)
-                                                        END as status
+                                                         END as status
                                                         ,LEFT(MAX(MSG:message:metrics:start_timestamp::VARCHAR), 19) start_timestamp
                                                         ,LEFT(MAX(MSG:message:metrics:end_timestamp::VARCHAR), 19) end_timestamp
                                                     FROM APP.METRICS
