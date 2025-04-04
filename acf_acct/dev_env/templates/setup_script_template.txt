@@ -94,6 +94,7 @@ SELECT
           )
           AND LOWER(m.account_locator) = LOWER(CURRENT_ACCOUNT()) 
           AND LOWER(m.KEY) = 'allowed_partners'
+          AND f.VALUE:access_expired::BOOLEAN = false
     )
     ,value
   ) AS value
@@ -226,6 +227,34 @@ ORDER BY 1,2,4;
 
 GRANT SELECT ON VIEW UTIL_APP.REQUEST_SUMMARY_C_V TO APPLICATION ROLE APP_ROLE;
 
+--create METRICS LOGGER / RUN HISTORY View
+CREATE OR REPLACE SECURE VIEW UTIL_APP.RUN_HISTORY_C_V COMMENT = '{"origin":"sf_sit","name":"acf","version":{"major":1, "minor":7},"attributes":{"env":"native_app","component":"verification_metrics","type":"secure_view"}}'
+AS
+SELECT
+    MSG:event_attributes[0]:request_id::VARCHAR request_id
+    ,MAX(MSG:message:metrics:input_object::VARCHAR) input_object
+    ,MAX(MSG:message:metrics:key_type::VARCHAR) key_type
+    ,MAX(MSG:message:metrics:pid_column::VARCHAR) pid_column
+    ,MAX(MSG:message:metrics:luid_column::VARCHAR) luid_column
+    ,LISTAGG(DISTINCT f.value:partner_name::VARCHAR, ', ') partners
+    ,MAX(MSG:message:metrics:results_table::VARCHAR) results_table
+    ,MAX(MSG:message:metrics:total_records::NUMBER(38,0)) total_records
+    ,CASE 
+        WHEN DATEDIFF('HOUR', TO_TIMESTAMP(MAX(MSG:message:metrics:start_timestamp::VARCHAR)), SYSTIMESTAMP()) >= 24 
+            AND MIN(MSG:status::VARCHAR) <> 'COMPLETE'
+        THEN 'FAILED'
+        ELSE MIN(MSG:status::VARCHAR)
+    END as status
+    ,LEFT(MAX(MSG:message:metrics:start_timestamp::VARCHAR), 19) start_timestamp
+    ,LEFT(MAX(MSG:message:metrics:end_timestamp::VARCHAR), 19) end_timestamp
+FROM APP.METRICS,
+LATERAL FLATTEN(input => PARSE_JSON(MSG:message:metrics:partners)) f
+WHERE LOWER(MSG:entry_type) = 'metric'
+AND LOWER(MSG:message:metric_type) = 'transcode_summary'
+GROUP BY 1
+ORDER BY 11 DESC;
+
+GRANT SELECT ON VIEW UTIL_APP.RUN_HISTORY_C_V TO APPLICATION ROLE APP_ROLE;
 
 --create CONFIGURE_TRACKER procedure 
 CREATE OR REPLACE PROCEDURE UTIL_APP.CONFIGURE_TRACKER()

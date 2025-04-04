@@ -1,20 +1,11 @@
-USE DATABASE P_EMS_TRANSCODER_SOURCE_DB_DEV;
-USE SCHEMA P_EMS_TRANSCODER_SOURCE_DB_DEV.PROCS_APP;
-
-create or replace procedure transcode(
-        inputTableName VARCHAR,
-        pidColumn VARCHAR,
-        luidColumn VARCHAR,
-        partnerList VARCHAR,
-        resultsTableName VARCHAR
-    )
-    returns String
-    language python
-    runtime_version = 3.11
-    packages =('snowflake-snowpark-python')
-    handler = 'main'
-    as 
-$$
+CREATE OR REPLACE PROCEDURE PROCS_APP.TRANSCODE("INPUTTABLENAME" VARCHAR, "PIDCOLUMN" VARCHAR, "LUIDCOLUMN" VARCHAR, "PARTNERLIST" VARCHAR, "RESULTSTABLENAME" VARCHAR)
+RETURNS VARCHAR
+LANGUAGE PYTHON
+RUNTIME_VERSION = '3.11'
+PACKAGES = ('snowflake-snowpark-python')
+HANDLER = 'main'
+EXECUTE AS OWNER
+AS '
 import snowflake.snowpark as snowpark
 import json
 
@@ -39,7 +30,7 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
         localAppKey = dataframe.collect()[0][0]
 
         # Get App license/mode
-        dataframe = session.sql("SELECT value FROM APP.APP_MODE WHERE LOWER(key) = 'app_mode'")
+        dataframe = session.sql("SELECT value FROM APP.APP_MODE WHERE LOWER(key) = ''app_mode''")
         appLicense = dataframe.collect()[0][0]
 
         #get total record count from input table - this will be used to set each partner transcoded record count, if allowed
@@ -53,7 +44,7 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
         getConsumerNameSQL = "SELECT CURRENT_ACCOUNT_NAME() as acct_name"
 
         if appLicense == "paid":
-            getConsumerNameSQL = "SELECT 'PD_' || CURRENT_ACCOUNT_NAME() as acct_name"
+            getConsumerNameSQL = "SELECT ''PD_'' || CURRENT_ACCOUNT_NAME() as acct_name"
 
         if "enterprise" in appLicense.lower():
             getConsumerNameSQL = "SELECT consumer_name FROM UTIL_APP.METADATA_C_V"
@@ -64,8 +55,8 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
 
         # Get local Consumer Key for Decrypting
         dataframe = session.sql("SELECT value FROM METADATA.METADATA_V " +
-                                "WHERE LOWER(key) = 'client_code' " +
-                                f"AND ACCOUNT_LOCATOR = '{accountLocator}'"
+                                "WHERE LOWER(key) = ''client_code'' " +
+                                f"AND ACCOUNT_LOCATOR = ''{accountLocator}''"
                                )
         localConsumerKey = dataframe.collect()[0][0]
 
@@ -83,24 +74,30 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
 
         if not pidColumn and not luidColumn:
             #log error msg
-            session.sql(f"""CALL UTIL_APP.APP_LOGGER('{accountLocator}', '{localConsumerName}', '{localAppKey}', '{appLicense}', 'log', 'request', '[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]', SYSDATE(), 'ERROR', '"PID or  LUID column was not submitted. Please resubmit with either a PID and/or LUID column value."')""").collect()
+            session.sql(f"""CALL UTIL_APP.APP_LOGGER(''{accountLocator}'', ''{localConsumerName}'', ''{localAppKey}'', ''{appLicense}'', ''log'', ''request'', ''[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]'', SYSDATE(), ''ERROR'', ''"PID or  LUID column was not submitted. Please resubmit with either a PID and/or LUID column value."'')""").collect()
         
             return "ERROR: PID or  LUID column was not submitted. Please resubmit with either a PID and/or LUID column value."
 
+        # Clean the partner list string
+        partnerList = "".join(char for char in partnerList if char.isalnum() or char in "-,_")
+
+        if len(partnerList) < 1:
+            return "Error: Partner List argument cannot be empty, please use alphanumeric and -,_ characters to define partners."
+            
         # Get the secured Experian Partner keys for allowed partners/collaborators
         allowedPartnersDF = session.sql("SELECT f.value:partner_name::STRING as partner_name," +
                                             "f.value:partner_client_code::STRING as partner_client_code," +
                                             "f.value:access_expiration_timestamp::TIMESTAMP as access_expiration_timestamp , " +
                                             "CASE" +
-                                            "    WHEN f.value:access_expiration_timestamp::TIMESTAMP >= SYSDATE() THEN 'Unexpired'" +
-                                            "    ELSE 'Expired' " +
+                                            "    WHEN f.value:access_expiration_timestamp::TIMESTAMP >= SYSDATE() THEN ''Unexpired''" +
+                                            "    ELSE ''Expired'' " +
                                             "END as access_window_status " +
                                         "FROM TABLE(FLATTEN(input => parse_json(" +
                                             "SELECT value " +
                                             "FROM METADATA.METADATA_V " +
-                                            "WHERE LOWER(key) = 'allowed_partners' " +
-                                            "AND ACCOUNT_LOCATOR = '" + accountLocator + 
-                                        "'), path => 'allowed_partners')) f")
+                                            "WHERE LOWER(key) = ''allowed_partners'' " +
+                                            "AND ACCOUNT_LOCATOR = ''" + accountLocator + 
+                                        "''), path => ''allowed_partners'')) f")
 
         # First part of SQL to generate Results Table
         resultsTableSQL = f"CREATE OR REPLACE TABLE {resultsTableName} AS SELECT *, "
@@ -119,7 +116,7 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
             if len(allowedPartnersDF.where(allowedPartnersDF.PARTNER_NAME == partnerName).select("PARTNER_CLIENT_CODE").collect()) == 0:
                 status_str = "Not Allowed"
             else: 
-                if allowedPartnersDF.where(allowedPartnersDF.PARTNER_NAME == partnerName).select("ACCESS_WINDOW_STATUS").collect()[0][0] == 'Expired':
+                if allowedPartnersDF.where(allowedPartnersDF.PARTNER_NAME == partnerName).select("ACCESS_WINDOW_STATUS").collect()[0][0] == ''Expired'':
                     status_str = "Expired"
 
             # Add Columns to CREATE Results Table SQL statement
@@ -128,21 +125,21 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
                 #set partnerTotalRecordsTranscoded to 0, since the partner cannot be accessed
                 partnerTotalRecordsTranscoded = 0
 
-                if len(pidColumn) > 0 or pidColumn.lower() != 'n/a':
-                    resultsTableSQL += f"'{status_str}' AS {partnerName.replace(' ', '_')}_PID,"
+                if len(pidColumn) > 0 and pidColumn.lower() != ''n/a'':
+                    resultsTableSQL += f"''{status_str}'' AS {partnerName.replace('' '', ''_'')}_PID,"
                     
-                if len(luidColumn) > 0 or luidColumn.lower() != 'n/a':
-                    resultsTableSQL += f"'{status_str}' AS {partnerName.replace(' ', '_')}_LUID,"
+                if len(luidColumn) > 0 and luidColumn.lower() != ''n/a'':
+                    resultsTableSQL += f"''{status_str}'' AS {partnerName.replace('' '', ''_'')}_LUID,"
             else:
                 partner_code = allowedPartnersDF.where(allowedPartnersDF.PARTNER_NAME == partnerName).select("PARTNER_CLIENT_CODE").collect()[0][0]
                 
-                if len(pidColumn) > 0 or pidColumn.lower() != 'n/a':
-                    resultsTableSQL += f"""FUNCS_APP.SCRAMBLE(FUNCS_APP.DESCRAMBLE({pidColumn}, '{localConsumerKey}'), '{partner_code}') AS
-                                       {partnerName.replace(' ', '_')}_PID,"""
+                if len(pidColumn) > 0 and pidColumn.lower() != ''n/a'':
+                    resultsTableSQL += f"""FUNCS_APP.SCRAMBLE(FUNCS_APP.DESCRAMBLE({pidColumn}, ''{localConsumerKey}''), ''{partner_code}'') AS
+                                       {partnerName.replace('' '', ''_'')}_PID,"""
                                        
-                if len(luidColumn) > 0 or luidColumn.lower() != 'n/a':
-                    resultsTableSQL += f"""FUNCS_APP.SCRAMBLE(FUNCS_APP.DESCRAMBLE({luidColumn}, '{localConsumerKey}'), '{partner_code}') AS
-                                   {partnerName.replace(' ', '_')}_LUID,"""
+                if len(luidColumn) > 0 and luidColumn.lower() != ''n/a'':
+                    resultsTableSQL += f"""FUNCS_APP.SCRAMBLE(FUNCS_APP.DESCRAMBLE({luidColumn}, ''{localConsumerKey}''), ''{partner_code}'') AS
+                                   {partnerName.replace('' '', ''_'')}_LUID,"""
 
             #generate partner transcoding metrics object, then append it to the partnerTranscodingMetricsList list
             partner_transcoding_dict ={"partner_name":f"{partnerName}","total_records_transcoded":partnerTotalRecordsTranscoded, "notes":f"{status_str}"}
@@ -151,32 +148,58 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
                 partnerTranscodingMetricsList.append(partner_transcoding_dict)
 
         #strip off final comma
-        resultsTableSQL = resultsTableSQL.rstrip(',')
+        resultsTableSQL = resultsTableSQL.rstrip('','')
                 
         # Final part of SQL to generate Results Table
         resultsTableSQL += f" FROM {inputTableName}"
 
-        # Create resutls table 🤞
+        #log Processing transcoding metrics via the APP_LOGGER (adds metrics to the events table)
+        session.sql(f"""CALL UTIL_APP.METRICS_LOGGER(''{accountLocator}''
+                                                            ,''{localConsumerName}''
+                                                            ,''{localAppKey}''
+                                                            ,''{appLicense}''
+                                                            ,''metric''
+                                                            ,''request''
+                                                            ,''[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]''
+                                                            ,SYSDATE()
+                                                            ,''PROCESSING''
+                                                            ,''{{
+                                                                "metric_type":"transcode_summary",
+                                                                "metrics":{{
+                                                                    "input_object":"{inputTableName}",
+                                                                    "key_type":"{key_type}",
+                                                                    "pid_column":"{pidColumn}",
+                                                                    "luid_column":"{luidColumn}",
+                                                                    "partners":{json.dumps(partnerTranscodingMetricsList)},
+                                                                    "results_table":"{resultsTableName}",
+                                                                    "total_records":{totalRecords},
+                                                                    "start_timestamp":"{startTimestamp}",
+                                                                    "end_timestamp":"",
+                                                                }}
+                                                            }}''
+                                                            )
+                                                        """).collect()
+        # Create results table 🤞
         session.sql(resultsTableSQL).collect()
 
         #set endTimestamp
         endTimestamp = session.sql("SELECT SYSDATE()").collect()[0][0]
 
         # Write results to run_tracker
-        session.sql(f"INSERT INTO APP.RUN_TRACKER(timestamp, request_id, request_type, input_table, output_table) VALUES(SYSDATE(), " \
-                    f"'{requestId}', 'transcode', '{inputTableName}', '{resultsTableName}');").collect()
+        session.sql(f"INSERT INTO APP.RUN_TRACKER(timestamp, request_id, request_type, input_table, output_table) VALUES(SYSDATE(), " \\
+                    f"''{requestId}'', ''transcode'', ''{inputTableName}'', ''{resultsTableName}'');").collect()
 
         #log transcoding metrics via the APP_LOGGER (adds metrics to the events table)
-        session.sql(f"""CALL UTIL_APP.APP_LOGGER('{accountLocator}'
-                                                            ,'{localConsumerName}'
-                                                            ,'{localAppKey}'
-                                                            ,'{appLicense}'
-                                                            ,'metric'
-                                                            ,'request'
-                                                            ,'[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]'
+        session.sql(f"""CALL UTIL_APP.APP_LOGGER(''{accountLocator}''
+                                                            ,''{localConsumerName}''
+                                                            ,''{localAppKey}''
+                                                            ,''{appLicense}''
+                                                            ,''metric''
+                                                            ,''request''
+                                                            ,''[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]''
                                                             ,SYSDATE()
-                                                            ,'COMPLETE'
-                                                            ,'{{
+                                                            ,''COMPLETE''
+                                                            ,''{{
                                                                 "metric_type":"transcode_summary",
                                                                 "metrics":{{
                                                                     "input_object":"{inputTableName}",
@@ -189,21 +212,21 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
                                                                     "start_timestamp":"{startTimestamp}",
                                                                     "end_timestamp":"{endTimestamp}",
                                                                 }}
-                                                            }}'
+                                                            }}''
                                                             )
                                                         """).collect()
 
         #log transcoding metrics via the METRICS_LOGGER (adds metrics to the local metrics table)
-        session.sql(f"""CALL UTIL_APP.METRICS_LOGGER('{accountLocator}'
-                                                            ,'{localConsumerName}'
-                                                            ,'{localAppKey}'
-                                                            ,'{appLicense}'
-                                                            ,'metric'
-                                                            ,'request'
-                                                            ,'[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]'
+        session.sql(f"""CALL UTIL_APP.METRICS_LOGGER(''{accountLocator}''
+                                                            ,''{localConsumerName}''
+                                                            ,''{localAppKey}''
+                                                            ,''{appLicense}''
+                                                            ,''metric''
+                                                            ,''request''
+                                                            ,''[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]''
                                                             ,SYSDATE()
-                                                            ,'COMPLETE'
-                                                            ,'{{
+                                                            ,''COMPLETE''
+                                                            ,''{{
                                                                 "metric_type":"transcode_summary",
                                                                 "metrics":{{
                                                                     "input_object":"{inputTableName}",
@@ -216,21 +239,21 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
                                                                     "start_timestamp":"{startTimestamp}",
                                                                     "end_timestamp":"{endTimestamp}"
                                                                 }}
-                                                            }}'
+                                                            }}''
                                                             )
                                                         """).collect()
                                                         
         #Log trancoding complete
-        session.sql(f"""CALL UTIL_APP.APP_LOGGER('{accountLocator}'
-                                                            ,'{localConsumerName}'
-                                                            ,'{localAppKey}'
-                                                            ,'{appLicense}'
-                                                            ,'log'
-                                                            ,'request'
-                                                            ,'[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]'
+        session.sql(f"""CALL UTIL_APP.APP_LOGGER(''{accountLocator}''
+                                                            ,''{localConsumerName}''
+                                                            ,''{localAppKey}''
+                                                            ,''{appLicense}''
+                                                            ,''log''
+                                                            ,''request''
+                                                            ,''[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]''
                                                             ,SYSDATE()
-                                                            ,'COMPLETE'
-                                                            ,'Results are located in: {resultsTableName}.'
+                                                            ,''COMPLETE''
+                                                            ,''Results are located in: {resultsTableName}.''
                                                             )
                                                         """).collect()
 
@@ -240,13 +263,13 @@ def main(session: snowpark.Session, inputTableName: str, pidColumn: str, luidCol
         session.sql("rollback").collect()
 
         #remove unwanted characters from error msg
-        error_eraw = str(e).replace("'","").replace("\r"," ").replace("\n"," ").replace("\r\n"," ").replace("\n\r"," ")
+        error_eraw = str(e).replace("''","").replace("\\r"," ").replace("\\n"," ").replace("\\r\\n"," ").replace("\\n\\r"," ")
 
         #log error msg
-        session.sql(f"""CALL UTIL_APP.APP_LOGGER('{accountLocator}', '{localConsumerName}', '{localAppKey}', '{appLicense}', 'log', 'request', '[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]', SYSDATE(), 'ERROR', '"{error_eraw}"')""").collect()
+        session.sql(f"""CALL UTIL_APP.APP_LOGGER(''{accountLocator}'', ''{localConsumerName}'', ''{localAppKey}'', ''{appLicense}'', ''log'', ''request'', ''[{{"request_id":"{requestId}"}}, {{"proc_name":"transcode"}}, {{"proc_parameters":"{procParametersEsc}"}}]'', SYSDATE(), ''ERROR'', ''"{error_eraw}"'')""").collect()
 
         msg_return = "Error: " + error_eraw
 
         raise Exception(msg_return)     
 
-$$
+';
