@@ -417,10 +417,10 @@ def render_transcode_wizard():
             #set selectbox text and values based on selected object
             st.session_state.picked_obj = st.selectbox(f"{upType.capitalize()}"
                                                       ,["(None selected)"]+list(st.session_state.refs_selected.keys())
+                                                      , index = st.session_state.sb_select_transcode_obj_idx
                                                       , key="sb_select_transcode_obj"
                                                       , on_change=selectbox_callback
-                                                      , args=("transcode", "sb_select_transcode_obj", "sb_select_transcode_obj_idx", list(st.session_state.refs_selected.keys())))
-
+                                                      , args=("transcode", "sb_select_transcode_obj", "sb_select_transcode_obj_idx", ["(None selected)"]+list(st.session_state.refs_selected.keys())))
             if(st.session_state.picked_obj_selected):
                 st.success(f"You have chosen {upType}: **{st.session_state.picked_obj}** 🎉")
                 st.write("")
@@ -430,8 +430,13 @@ def render_transcode_wizard():
                                            , key = "txt_results_table_name"
                                            , on_change = input_callback
                                            , args = ("transcode","results_table_name","txt_results_table_name")
-                                           )
+                                           ,help = "Enter a name for the transcoder output table. All tables will be created in the RESULTS_APP schema."
+                                           ).upper()
                 if txt_results_table_name != "":
+                    tableName = txt_results_table_name.rsplit('.', 1)[-1]
+
+                    if session.sql(f"SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'RESULTS_APP' AND TABLE_NAME = '{tableName}';").collect()[0][0] > 0:
+                        st.warning(f"Warning: Table '{tableName}' already exists in schema 'RESULTS_APP' and will be overwritten if you continue.")
                     st.session_state.disable_step_2 = False
             
     ###### Step 2: Select PID and LUID columns ######
@@ -519,7 +524,19 @@ def render_transcode_wizard():
             st.success(f"Partners Selected: \n{partner_str}")
             
             st.session_state.disable_step_4 = False
-        
+
+            #Check if requested partners have been proccessed in last 24 hours using the same input table
+            sqlStmt = f"""  SELECT upper(listagg(PARTNERS, ',')) as partner_name 
+                            FROM EMS_TRANSCODER_UI_DEMO_APP.UTIL_APP.RUN_HISTORY_C_V 
+                            WHERE DATEDIFF('HOUR', TO_TIMESTAMP(START_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'), SYSTIMESTAMP()) <= 24 
+                            AND INPUT_OBJECT = 'UTIL_APP.{st.session_state.picked_obj}';"""
+
+            partnersProcessed = session.sql(sqlStmt).collect()[0][0]
+            
+            partnersProcessedList = partnersProcessed.split(',')
+            upperTranscodePartnerlist = list(map(str.upper, st.session_state.transcoding_partners))
+            if all(item in partnersProcessedList for item in upperTranscodePartnerlist) and len(st.session_state.transcoding_partners) > 0:
+                st.warning("Note: The selected partner and input table combination has already been requested in the last day. Continuing will restart the same process.")
         
     ###### Step 4: Confirm Settings and Transcode ######
     if st.session_state.current_step == 4:
@@ -562,39 +579,29 @@ def render_transcode_wizard():
         st.write("")
 
         if flag_transcode:
-            #set cols to select based on key_type
-            pid_luid_sel_str = ""
-                
-            match st.session_state.key_type:
-                case "PID":
-                    pid_luid_sel_str = f"{st.session_state.pid_column}"
-                case "LUID":
-                    pid_luid_sel_str = f"{st.session_state.luid_column}"
-                case "PID_LUID":
-                    pid_luid_sel_str = f"{st.session_state.pid_column},{st.session_state.luid_column}"
-                
-            if pid_luid_sel_str != "":
-                #create a view of the consumer's input table, based on selected columns
-                session.sql(f"CREATE OR REPLACE VIEW UTIL_APP.{st.session_state.picked_obj} AS SELECT {pid_luid_sel_str} FROM reference('{st.session_state.ref}','{st.session_state.refs_selected[st.session_state.picked_obj]}')").collect()
-                input_table = f"UTIL_APP.{st.session_state.picked_obj}"
-                results_table = f"RESULTS_APP.{st.session_state.results_table_name}"
-                partners_csv = ",".join(st.session_state.transcoding_partners)
-                    
-                with st.spinner("Transcoding..."):
-                    call_request = session.sql(f"CALL PROCS_APP.REQUEST(OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{results_table}', 'proc_name','transcode', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('{input_table}','{st.session_state.pid_column}','{st.session_state.luid_column}','{partners_csv}','{results_table}'))::varchar)").collect()
-                    result = pd.DataFrame(call_request).iloc[0]['REQUEST']
-                    
-                    if any(err in result.lower() for err in ["error", "failed"]):
-                        st.error("**Transcoding Failed**", icon="🚨")
-                        st.write(result)
-                    else :
-                        st.success(f"Transcoding complete. Results table is located in {results_table} 🎉")
-                        
-                    #drop input view
-                    session.sql(f"DROP VIEW IF EXISTS UTIL_APP.{st.session_state.picked_obj}").collect()
-            else:
-                st.error("**Either a PID and/or LUID column was not selected or an inalid Key Type was supplied. Please check the Transcodeing Settings and try again.**", icon="🚨")               
+            #create a view of the consumer's input table, based on selected columns
+            session.sql(f"CREATE OR REPLACE VIEW UTIL_APP.{st.session_state.picked_obj} AS SELECT * FROM reference('{st.session_state.ref}','{st.session_state.refs_selected[st.session_state.picked_obj]}')").collect()
+            #Grant Access to view
+            session.sql(f"GRANT SELECT ON VIEW UTIL_APP.{st.session_state.picked_obj} TO APPLICATION ROLE APP_ROLE").collect()
 
+            input_table = f"UTIL_APP.{st.session_state.picked_obj}"
+            results_table = f"RESULTS_APP.{st.session_state.results_table_name}"
+            partners_csv = ",".join(st.session_state.transcoding_partners)
+            #Grant Access to view
+            session.sql(f"GRANT SELECT ON VIEW UTIL_APP.{st.session_state.picked_obj} TO APPLICATION ROLE APP_ROLE").collect()
+
+            with st.spinner("Transcoding..."):
+                call_request = session.sql(f"CALL PROCS_APP.REQUEST(OBJECT_CONSTRUCT('input_table','{input_table}', 'results_table', '{results_table}', 'proc_name','transcode', 'proc_parameters',ARRAY_CONSTRUCT_COMPACT('{input_table}','{st.session_state.pid_column}','{st.session_state.luid_column}','{partners_csv}','{results_table}'))::varchar)").collect()
+                result = pd.DataFrame(call_request).iloc[0]['REQUEST']
+
+                if any(err in result.lower() for err in ["error", "failed"]):
+                    st.error("**Transcoding Failed**", icon="🚨")
+                    st.write(result)
+                else :
+                    st.success(f"Transcoding complete. Results table is located in {results_table} 🎉")
+                    
+                #drop input view
+                session.sql(f"DROP VIEW IF EXISTS UTIL_APP.{st.session_state.picked_obj}").collect()
 
     ###### Bottom Navigation ###### 
     st.divider()
@@ -631,26 +638,23 @@ def render_run_history_view():
     col12.markdown('<span style="font-size: 14px;">**Preview**</span>', unsafe_allow_html=True)
 
     df_transcode_log = pd.DataFrame(session.sql(f"""SELECT
-                                                        MSG:event_attributes[0]:request_id::VARCHAR request_id
-                                                        ,MAX(MSG:message:metrics:input_object::VARCHAR) input_object
-                                                        ,MAX(MSG:message:metrics:key_type::VARCHAR) key_type
-                                                        ,MAX(MSG:message:metrics:pid_column::VARCHAR) pid_column
-                                                        ,MAX(MSG:message:metrics:luid_column::VARCHAR) luid_column
-                                                        ,MSG:message:metrics:partners::VARCHAR partners
-                                                        ,MAX(MSG:message:metrics:results_table::VARCHAR) results_table
-                                                        ,MAX(MSG:message:metrics:total_records::NUMBER(38,0)) total_records
-                                                        ,MIN(MSG:status::VARCHAR) status
-                                                        ,MAX(MSG:message:metrics:start_timestamp::VARCHAR) start_timestamp
-                                                        ,MAX(MSG:message:metrics:end_timestamp::VARCHAR) end_timestamp
-                                                    FROM APP.METRICS
-                                                    WHERE LOWER(MSG:entry_type) = 'metric'
-                                                    AND LOWER(MSG:message:metric_type) = 'transcode_summary'
-                                                    GROUP BY 1,6
-                                                    ORDER BY 11 DESC;""").collect())
+                                                        request_id
+                                                        ,input_object
+                                                        ,key_type
+                                                        ,pid_column
+                                                        ,luid_column
+                                                        ,partners
+                                                        ,results_table
+                                                        ,total_records
+                                                        ,status
+                                                        ,start_timestamp
+                                                        ,end_timestamp
+                                                    FROM UTIL_APP.RUN_HISTORY_C_V;
+                                                """).collect())
 
     for index, row in df_transcode_log.iterrows():
         request_id = str(row["REQUEST_ID"])
-        input_object = row["INPUT_OBJECT"]
+        input_object = str(row["INPUT_OBJECT"])
         key_type = str(row["KEY_TYPE"])
         pid_column = str(row["PID_COLUMN"])
         luid_column = str(row["LUID_COLUMN"])
@@ -668,11 +672,7 @@ def render_run_history_view():
         col3.markdown(f'<span style="font-size: 12px;">{key_type}</span>', unsafe_allow_html=True)
         col4.markdown(f'<span style="font-size: 12px;">{pid_column}</span>', unsafe_allow_html=True)
         col5.markdown(f'<span style="font-size: 12px;">{luid_column}</span>', unsafe_allow_html=True)
-        
-        for p_dict in json.loads(partners):
-            p = p_dict["partner_name"]
-            col6.markdown(f'<li style="font-size: 12px;">{p.strip()}</li>', unsafe_allow_html=True)
-        
+        col6.markdown(f'<span style="font-size: 12px;">{partners}</span>', unsafe_allow_html=True)
         col7.markdown(f'<span style="font-size: 12px;">{results_table}</span>', unsafe_allow_html=True)
         col8.markdown(f'<span style="font-size: 12px;">{total_records}</span>', unsafe_allow_html=True)
         col9.markdown(f'<span style="font-size: 12px;">{status}</span>', unsafe_allow_html=True)
